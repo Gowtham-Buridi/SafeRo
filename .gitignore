@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Environment & Secrets (NEVER COMMIT SENSITIVE FILES)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+*.egg
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+*.cover
+
+# ML Data & Artifacts
+ml/data/raw/
+ml/data/processed/
+ml/data/test_tmp/
+!ml/models/artifacts/*
+
+# Logs
+logs/
+*.log
+
+# Docker
+docker-compose.override.yml

@@ -1,0 +1,26 @@
+{
+  "name": "safero",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SafeRo — AI Risk Intelligence for Merchants",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w apps/web",
+    "dev:api": "npm run dev -w apps/api",
+    "build": "npm run build:api && npm run build:web",
+    "build:web": "npm run build -w apps/web",
+    "build:api": "npm run build -w apps/api",
+    "start:api": "npm run start -w apps/api",
+    "test:web": "npm run test -w apps/web",
+    "test:api": "npm run test -w apps/api",
+    "test": "npm run test:web && npm run test:api",
+    "typecheck": "npm run typecheck -w apps/web && npm run typecheck -w apps/api",
+    "lint": "npm run lint -w apps/web && npm run lint -w apps/api"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

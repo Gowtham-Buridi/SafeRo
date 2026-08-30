@@ -1,0 +1,82 @@
+{
+  "0": {
+    "ring_id": 0,
+    "probability": 0.943,
+    "risk_level": "critical",
+    "weight_factors": {
+      "louvain_centrality": 0.75,
+      "hardware_collision": "1.4x",
+      "burst_velocity": 0.86
+    }
+  },
+  "1": {
+    "ring_id": 1,
+    "probability": 0.906,
+    "risk_level": "critical",
+    "weight_factors": {
+      "louvain_centrality": 0.62,
+      "hardware_collision": "2.5x",
+      "burst_velocity": 0.54
+    }
+  },
+  "2": {
+    "ring_id": 2,
+    "probability": 0.908,
+    "risk_level": "critical",
+    "weight_factors": {
+      "louvain_centrality": 0.72,
+      "hardware_collision": "1.2x",
+      "burst_velocity": 0.73
+    }
+  },
+  "3": {
+    "ring_id": 3,
+    "probability": 0.983,
+    "risk_level": "critical",
+    "weight_factors": {
+      "louvain_centrality": 0.96,
+      "hardware_collision": "2.4x",
+      "burst_velocity": 0.9
+    }
+  },
+  "4": {
+    "ring_id": 4,
+    "probability": 0.991,
+    "risk_level": "critical",
+    "weight_factors": {
+      "louvain_centrality": 0.72,
+      "hardware_collision": "1.4x",
+      "burst_velocity": 0.71
+    }
+  },
+  "5": {
+    "ring_id": 5,
+    "probability": 0.885,
+    "risk_level": "critical",
+    "weight_factors": {
+      "louvain_centrality": 0.7,
+      "hardware_collision": "2.0x",
+      "burst_velocity": 0.48
+    }
+  },
+  "6": {
+    "ring_id": 6,
+    "probability": 0.937,
+    "risk_level": "critical",
+    "weight_factors": {
+      "louvain_centrality": 0.64,
+      "hardware_collision": "1.2x",
+      "burst_velocity": 0.64
+    }
+  },
+  "7": {
+    "ring_id": 7,
+    "probability": 0.907,
+    "risk_level": "critical",
+    "weight_factors": {
+      "louvain_centrality": 0.79,
+      "hardware_collision": "1.2x",
+      "burst_velocity": 0.92
+    }
+  }
+}

@@ -1,0 +1,14 @@
+-- ============================================================
+-- SafeRo — Seed Data
+-- ============================================================
+-- This file is intentionally minimal for Part 1.
+-- Synthetic data generation will be implemented in Part 2.
+-- 
+-- To add seed data, insert rows below.
+-- Example:
+--
+-- INSERT INTO users (email, password_hash, full_name, role)
+-- VALUES ('admin@safero.dev', '$2b$10$...', 'Admin User', 'admin');
+--
+-- Do NOT insert real personal information or payment data.
+-- All seed data must be synthetic.

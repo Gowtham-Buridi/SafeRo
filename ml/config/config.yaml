@@ -1,0 +1,47 @@
+# SafeRo ML Configuration
+# All paths are relative to the ml/ directory.
+
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  synthetic_dir: data/synthetic
+
+features:
+  # Feature engineering configuration
+  transaction_window_hours: 24
+  velocity_windows: [1, 6, 24, 72, 168]  # hours
+  graph_depth: 2
+
+models:
+  output_dir: models/artifacts
+  random_seed: 42
+
+anomaly_detection:
+  contamination: 0.05  # Expected proportion of anomalies
+  methods:
+    - isolation_forest
+    - local_outlier_factor
+
+graph:
+  # Graph analysis configuration
+  community_detection: louvain
+  min_cluster_size: 3
+  similarity_threshold: 0.7
+
+evaluation:
+  test_set_ratio: 0.2
+  # Held-out test set must be strictly separated
+  stratified: true
+  metrics:
+    - precision
+    - recall
+    - f1
+    - false_positive_rate
+    - auc_roc
+
+calibration:
+  method: isotonic  # isotonic or platt
+
+inference:
+  batch_size: 1000
+  timeout_seconds: 30

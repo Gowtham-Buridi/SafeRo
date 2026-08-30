@@ -1,0 +1,7 @@
+{
+  "include": ["src", "tests"],
+  "extraPaths": ["."],
+  "pythonPath": "C:\\Users\\burid\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+  "reportMissingImports": false,
+  "reportMissingModuleSource": false
+}

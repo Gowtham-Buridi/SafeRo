@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="46.188063" viewBox="0 0 80 46.188063">
+  <defs>
+    <style>
+      .grid-line {
+        stroke: rgba(234, 88, 12, 0.22);
+        stroke-width: 0.75;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .facet-fill-1 {
+        fill: rgba(249, 115, 22, 0.04);
+      }
+      .facet-fill-2 {
+        fill: rgba(249, 115, 22, 0.015);
+      }
+    </style>
+  </defs>
+
+  <!-- Facet Shading for 3D Isometric Depth -->
+  <polygon points="40,0 80,23.094031 40,46.188063 0,23.094031" class="facet-fill-1" />
+  <polygon points="0,0 40,0 0,23.094031" class="facet-fill-2" />
+  <polygon points="40,0 80,0 80,23.094031" class="facet-fill-2" />
+  <polygon points="0,23.094031 40,46.188063 0,46.188063" class="facet-fill-2" />
+  <polygon points="80,23.094031 40,46.188063 80,46.188063" class="facet-fill-2" />
+
+  <!-- Diagonals -->
+  <line x1="0" y1="23.094031" x2="40" y2="0" class="grid-line" />
+  <line x1="40" y1="0" x2="80" y2="23.094031" class="grid-line" />
+  <line x1="80" y1="23.094031" x2="40" y2="46.188063" class="grid-line" />
+  <line x1="40" y1="46.188063" x2="0" y2="23.094031" class="grid-line" />
+
+  <line x1="0" y1="0" x2="40" y2="23.094031" class="grid-line" />
+  <line x1="40" y1="23.094031" x2="80" y2="0" class="grid-line" />
+  <line x1="0" y1="46.188063" x2="40" y2="23.094031" class="grid-line" />
+  <line x1="40" y1="23.094031" x2="80" y2="46.188063" class="grid-line" />
+
+  <!-- Horizontals -->
+  <line x1="0" y1="23.094031" x2="80" y2="23.094031" class="grid-line" />
+  <line x1="0" y1="0" x2="80" y2="0" class="grid-line" />
+  <line x1="0" y1="46.188063" x2="80" y2="46.188063" class="grid-line" />
+</svg>

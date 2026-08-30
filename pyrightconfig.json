@@ -1,0 +1,10 @@
+{
+  "include": ["scripts", "ml/src", "ml/tests"],
+  "extraPaths": [".", "ml", "ml/src"],
+  "pythonPath": "C:\\Users\\burid\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+  "reportMissingImports": false,
+  "reportMissingModuleSource": false,
+  "executionEnvironments": [
+    { "root": "." }
+  ]
+}

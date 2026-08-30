@@ -1,0 +1,56 @@
+services:
+  # ── 1. Python ML Scoring Microservice (FastAPI + XGBoost) ──────────
+  - type: web
+    name: safero-ml
+    runtime: python
+    buildCommand: pip install -r ml/requirements.txt
+    startCommand: uvicorn ml.service.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.12
+      - key: MODEL_VERSION
+        value: v1
+
+  # ── 2. Node.js Core API Service (Fastify + Multi-Tenant Engine) ───
+  - type: web
+    name: safero-api
+    runtime: node
+    buildCommand: npm install && npm run build:api
+    startCommand: npm run start -w apps/api
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ML_SERVICE_URL
+        fromService:
+          type: web
+          name: safero-ml
+          property: host
+      - key: GROQ_API_KEY
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+
+  # ── 3. React Frontend (Optional Render Static Site) ────────────────
+  - type: web
+    name: safero-web
+    runtime: static
+    buildCommand: npm install && npm run build:web
+    staticPublishPath: apps/web/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: safero-api
+          property: host

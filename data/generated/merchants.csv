@@ -1,0 +1,11 @@
+merchant_id,name,business_type,category
+28870073-fe65-44b5-b52a-6493dc0016fd,Merchant_000,ecommerce,entertainment
+04795039-6bb2-4022-92c4-4eaceb902ec0,Merchant_001,digital,education
+44959ef3-b42f-4e6b-afd5-7a0a81317b14,Merchant_002,travel,utilities
+563e43fa-b8bc-45dc-8d60-a4c2093ddff5,Merchant_003,food,utilities
+96d20b35-2b7d-4e89-bcbf-27c84aa35780,Merchant_004,food,utilities
+a0ed6ea0-9ca3-476e-9643-a23fb566d537,Merchant_005,services,utilities
+675140ee-0253-4429-873d-17ab90b6837f,Merchant_006,ecommerce,entertainment
+4a34c787-bdd6-442f-978b-590a62b557f2,Merchant_007,digital,electronics
+5a65738f-e1b8-43f7-8dea-0fcf02106715,Merchant_008,retail,education
+61b65438-9271-42d4-9bcd-586c8aa58357,Merchant_009,ecommerce,grocery
