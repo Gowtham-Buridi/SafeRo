@@ -52,9 +52,10 @@ export function Dashboard() {
   const [onboardingDismissed, setOnboardingDismissed] = useState(
     () => localStorage.getItem('safero_onboarding_dismissed') === 'true'
   );
+  const [selectedGateway, setSelectedGateway] = useState<'razorpay' | 'stripe' | 'cashfree' | 'custom'>('razorpay');
   const [copiedUrl, setCopiedUrl] = useState(false);
 
-  const webhookUrl = `${API_BASE_URL}/webhooks/razorpay`;
+  const webhookUrl = `${API_BASE_URL}/webhooks/${selectedGateway}`;
 
   const copyWebhook = () => {
     navigator.clipboard.writeText(webhookUrl);
@@ -228,7 +229,7 @@ export function Dashboard() {
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                  Connect Razorpay, Stripe, or Cashfree in 2 minutes to stream transactions and map fraud rings in real time.
+                  Select your gateway to stream transactions and map fraud rings in real time:
                 </p>
               </div>
             </div>
@@ -240,6 +241,24 @@ export function Dashboard() {
             >
               ✕ Dismiss
             </button>
+          </div>
+
+          {/* Gateway Switcher Tabs */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            {(['razorpay', 'stripe', 'cashfree', 'custom'] as const).map((gw) => (
+              <button
+                key={gw}
+                type="button"
+                onClick={() => setSelectedGateway(gw)}
+                className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer capitalize ${
+                  selectedGateway === gw
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                }`}
+              >
+                {gw === 'custom' ? 'Generic / Custom API' : gw}
+              </button>
+            ))}
           </div>
 
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2.5 pt-1">

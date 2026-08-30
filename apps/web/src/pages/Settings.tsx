@@ -52,6 +52,7 @@ function SettingsSection({
 }
 
 export function Settings() {
+  const [selectedGateway, setSelectedGateway] = useState<'razorpay' | 'stripe' | 'cashfree' | 'custom'>('razorpay');
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
   const [webhookHistory, setWebhookHistory] = useState<any[]>([]);
@@ -64,7 +65,7 @@ export function Settings() {
   const [costErrors, setCostErrors] = useState<{ fp?: string; fraud?: string; review?: string }>({});
   const [costSaved, setCostSaved] = useState(false);
 
-  const webhookUrl = `${API_BASE_URL}/webhooks/razorpay`;
+  const webhookUrl = `${API_BASE_URL}/webhooks/${selectedGateway}`;
   const webhookSecret = 'whsec_safero_live_948271049281';
 
   const copyText = (text: string, type: 'url' | 'secret') => {
@@ -139,15 +140,34 @@ export function Settings() {
           icon={<Webhook className="h-6 w-6" />}
         >
           <div className="space-y-5">
+            {/* Gateway Switcher Tabs */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-slate-700 mr-1">Select Gateway:</span>
+              {(['razorpay', 'stripe', 'cashfree', 'custom'] as const).map((gw) => (
+                <button
+                  key={gw}
+                  type="button"
+                  onClick={() => setSelectedGateway(gw)}
+                  className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer capitalize ${
+                    selectedGateway === gw
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  {gw === 'custom' ? 'Generic / Custom API' : gw}
+                </button>
+              ))}
+            </div>
+
             <div className="grid grid-cols-1 gap-4">
               {/* Webhook URL Field */}
               <div className="rounded-2xl border border-slate-200/90 bg-slate-50/50 p-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500">
-                    Production Webhook URL
+                    Production {selectedGateway.toUpperCase()} Webhook URL
                   </span>
                   <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                    HMAC-SHA256 Ready
+                    Real-time ML Active
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -185,7 +205,7 @@ export function Settings() {
                     Webhook Signing Secret
                   </span>
                   <span className="text-[10px] font-mono text-slate-400">
-                    Enter in Razorpay / Stripe Dashboard
+                    Header: {selectedGateway === 'stripe' ? 'Stripe-Signature' : selectedGateway === 'cashfree' ? 'x-webhook-signature' : 'X-Razorpay-Signature'}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
