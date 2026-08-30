@@ -316,5 +316,5 @@ SafeRo/
 
 ## 📄 License
 
-Distributed under the **MIT License** — Built with pride for the **Razorpay Buildathon**.
+Distributed under the **MIT License**.
 Copyright © 2026 SafeRo Team. All rights reserved.
