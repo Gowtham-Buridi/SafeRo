@@ -171,7 +171,7 @@ export async function transactionRoutes(app: FastifyInstance) {
         [...params, pageSize, offset],
       );
 
-      const rows = dataRes.rows.map(r => {
+      const rows = dataRes.rows.map((r: any) => {
         const rawCust = r.customer_id || (r.metadata?.customer_id ?? 'cust_live');
         const maskedCust = r.customer_masked || (r.metadata?.customer_masked ?? maskEmail(rawCust));
         return {
@@ -317,7 +317,7 @@ export async function transactionRoutes(app: FastifyInstance) {
           action: row.action,
           model_version: row.model_version || 'v1.0.0-realtime',
           signals: row.signals_json ?? [],
-          related_transactions: relatedRes.rows.map(r => ({
+          related_transactions: relatedRes.rows.map((r: any) => ({
             ...r,
             amount: parseFloat(r.amount),
             customer_id: r.customer_masked || maskEmail(r.customer_id || ''),

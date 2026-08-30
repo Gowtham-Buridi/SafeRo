@@ -57,6 +57,7 @@ vi.mock('../src/lib/api.ts', () => ({
   setStoredAuthTokens: vi.fn(),
   clearStoredAuth: vi.fn(),
   USER_STORAGE_KEY: 'safero_auth_user',
+  API_BASE_URL: 'http://localhost:3001/api/v1',
 }));
 
 describe('App', () => {

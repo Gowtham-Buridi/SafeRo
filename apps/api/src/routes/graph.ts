@@ -57,7 +57,7 @@ export async function graphRoutes(app: FastifyInstance) {
 
         // Group live ring transactions by shared device_id
         const ringMap = new Map<string, typeof liveRingTxns>();
-        liveRingTxns.forEach(t => {
+        liveRingTxns.forEach((t: any) => {
           const key = t.device_id || 'dev_live_flagged';
           if (!ringMap.has(key)) ringMap.set(key, []);
           ringMap.get(key)!.push(t);
@@ -65,7 +65,7 @@ export async function graphRoutes(app: FastifyInstance) {
 
         const liveClusters = await Promise.all(
           Array.from(ringMap.entries()).map(async ([deviceId, txns], idx) => {
-            const totalAmount = txns.reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
+            const totalAmount = txns.reduce((acc: number, t: any) => acc + parseFloat(t.amount || 0), 0);
             const ringId = idx + 1;
 
             let mlRiskScore = 0.85;
@@ -78,7 +78,7 @@ export async function graphRoutes(app: FastifyInstance) {
                 ring_id: ringId,
                 device_id: deviceId,
                 ip_address: txns[0]?.ip_address,
-                member_count: new Set(txns.map(t => t.customer_id)).size,
+                member_count: new Set(txns.map((t: any) => t.customer_id)).size,
                 transaction_count: txns.length,
                 total_amount: totalAmount,
               });
@@ -103,8 +103,8 @@ export async function graphRoutes(app: FastifyInstance) {
               weight_factors: mlWeightFactors,
               model_version: mlVersion,
               entity_count: txns.length + 3,
-              member_count: new Set(txns.map(t => t.customer_id)).size,
-              customer_ids: Array.from(new Set(txns.map(t => t.customer_id))),
+              member_count: new Set(txns.map((t: any) => t.customer_id)).size,
+              customer_ids: Array.from(new Set(txns.map((t: any) => t.customer_id))),
               shared_device_id: deviceId,
               shared_ip_id: txns[0]?.ip_address || '0.0.0.0',
               shared_pm_id: txns[0]?.metadata?.pm_id || 'pm_card_flagged',

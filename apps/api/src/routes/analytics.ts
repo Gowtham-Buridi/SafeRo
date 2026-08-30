@@ -91,7 +91,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
         [authCtx.merchantId],
       );
 
-      const series = res.rows.map(r => ({
+      const series = res.rows.map((r: any) => ({
         date: r.date,
         total_count: parseInt(r.total_count, 10),
         ring_count: parseInt(r.ring_count, 10),

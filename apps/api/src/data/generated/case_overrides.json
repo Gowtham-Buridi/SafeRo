@@ -674,11 +674,32 @@
       ],
       "audit_trail": [
         {
-          "id": "aud_1788115691514_8105",
-          "timestamp": "2026-08-30T18:48:11.514Z",
+          "id": "aud_1788120482787_rjl7",
+          "timestamp": "2026-08-30T20:08:02.787Z",
           "actor": "Analyst",
           "action": "Status → Confirmed",
           "details": "Case moved from confirmed to confirmed"
+        },
+        {
+          "id": "aud_1788120432812_dbfl",
+          "actor": "Analyst",
+          "action": "Status → Confirmed",
+          "details": "Case moved from confirmed to confirmed",
+          "timestamp": "2026-08-30T20:07:12.812Z"
+        },
+        {
+          "id": "aud_1788120384329_p54v",
+          "actor": "Analyst",
+          "action": "Status → Confirmed",
+          "details": "Case moved from confirmed to confirmed",
+          "timestamp": "2026-08-30T20:06:24.329Z"
+        },
+        {
+          "id": "aud_1788115691514_8105",
+          "actor": "Analyst",
+          "action": "Status → Confirmed",
+          "details": "Case moved from confirmed to confirmed",
+          "timestamp": "2026-08-30T18:48:11.514Z"
         },
         {
           "id": "aud_1788115517476_u4qx",
@@ -751,7 +772,7 @@
         "merchant_notified": false
       },
       "created_at": "2026-08-30T18:43:50.241Z",
-      "updated_at": "2026-08-30T18:48:12.165Z"
+      "updated_at": "2026-08-30T20:08:03.408Z"
     }
   ]
 }

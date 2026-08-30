@@ -67,7 +67,7 @@ async function buildSystemPrompt(authCtx: AuthContext): Promise<string> {
       );
       openCaseCount = casesRes.rows.length;
       casesSummary = casesRes.rows
-        .map((c) => `  - [${(c.severity || 'high').toUpperCase()}] ${c.title} (risk: ${(parseFloat(c.risk_score || 0.85) * 100).toFixed(0)}%)`)
+        .map((c: any) => `  - [${(c.severity || 'high').toUpperCase()}] ${c.title} (risk: ${(parseFloat(c.risk_score || 0.85) * 100).toFixed(0)}%)`)
         .join('\n');
 
       // Fetch live rings
@@ -82,7 +82,7 @@ async function buildSystemPrompt(authCtx: AuthContext): Promise<string> {
       );
       activeRingCount = ringsRes.rows.length;
       ringsSummary = ringsRes.rows
-        .map((r, idx) => `  - Live Cluster #${idx + 1}: ${r.txn_count} transactions, device ${r.device_id?.slice(0, 12)}, exposure ₹${parseFloat(r.ring_volume || 0).toLocaleString()}`)
+        .map((r: any, idx: number) => `  - Live Cluster #${idx + 1}: ${r.txn_count} transactions, device ${r.device_id?.slice(0, 12)}, exposure ₹${parseFloat(r.ring_volume || 0).toLocaleString()}`)
         .join('\n');
     } catch (err) {
       logger.warn({ err }, 'Failed to load live AI telemetry context from Postgres');

@@ -6,6 +6,8 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"],
     "paths": {
       "@safero/shared": ["../../packages/shared/src/index.ts"]
     }

@@ -22,8 +22,8 @@ export const pool = new Pool({
   }),
 });
 
-pool.on('error', (err) => {
-  logger.error({ err }, 'Unexpected database pool error');
+pool.on('error', (err: any) => {
+  logger.error({ err: err?.message || err }, 'Unexpected database pool error');
 });
 
 export async function checkDatabaseConnection(): Promise<boolean> {
