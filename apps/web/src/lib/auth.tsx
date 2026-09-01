@@ -15,6 +15,7 @@ export interface AuthUser {
   email: string;
   name: string;
   role: string;
+  merchantId?: string;
   isDemo?: boolean;
 }
 
@@ -48,6 +49,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (token && storedUser) {
         const parsedUser: AuthUser = JSON.parse(storedUser);
+        if (!parsedUser.merchantId) {
+          parsedUser.merchantId = parsedUser.id;
+        }
         setUser(parsedUser);
         const lockedEnv: PlatformEnvironment = parsedUser.isDemo ? 'demo' : 'live';
         setEnvironmentState(lockedEnv);
@@ -83,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: res.user.email,
         name: res.user.full_name || 'Risk Analyst',
         role: res.user.role || 'analyst',
+        merchantId: res.user.merchant_id || res.user.id,
         isDemo: isDemoUser,
       };
 
@@ -115,6 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: res.user.email,
         name: res.user.full_name || fullName.trim(),
         role: res.user.role || 'analyst',
+        merchantId: res.user.merchant_id || res.user.id,
         isDemo: false,
       };
 

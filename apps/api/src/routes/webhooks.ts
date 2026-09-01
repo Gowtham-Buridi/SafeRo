@@ -33,22 +33,34 @@ export interface WebhookLogEntry {
 const webhookAuditBuffer: WebhookLogEntry[] = [];
 
 /**
- * 4-tier waterfall resolution for incoming webhook merchant tenant identity:
- * 1. Webhook endpoint URL query param: `?merchant_id=m_xyz`
- * 2. Integration header: `X-Merchant-ID: m_xyz`
- * 3. Checkout notes/metadata: `payload.payment.entity.notes.merchant_id` or `metadata.merchant_id`
- * 4. Account ID DB mapping: `body.account_id` -> `merchants.razorpay_merchant_id`
- * 5. Default connected store fallback: `'m_ecommerce_01'`
+ * 5-tier waterfall resolution for incoming webhook merchant tenant identity:
+ * 1. Webhook endpoint URL route param: `/webhooks/:gateway/:merchantId`
+ * 2. Webhook endpoint URL query param: `?merchant_id=m_xyz`
+ * 3. Integration header: `X-Merchant-ID: m_xyz` or `X-Safero-Merchant-ID: m_xyz`
+ * 4. Checkout notes/metadata: `payload.payment.entity.notes.merchant_id` or `metadata.merchant_id`
+ * 5. Account ID DB mapping: `body.account_id` -> `merchants.razorpay_merchant_id`
+ * 6. Default connected store fallback: `'m_ecommerce_01'`
  */
 async function resolveWebhookMerchantId(request: FastifyRequest, body: any, paymentEntity: any): Promise<string> {
-  const queryMerchant = (request.query as any)?.merchant_id;
-  if (queryMerchant) return queryMerchant;
+  const paramMerchant = (request.params as any)?.merchantId || (request.params as any)?.merchant_id;
+  if (paramMerchant && typeof paramMerchant === 'string' && paramMerchant.trim() !== '') {
+    return paramMerchant.trim();
+  }
 
-  const headerMerchant = request.headers['x-merchant-id'] as string;
-  if (headerMerchant) return headerMerchant;
+  const queryMerchant = (request.query as any)?.merchant_id || (request.query as any)?.merchantId;
+  if (queryMerchant && typeof queryMerchant === 'string' && queryMerchant.trim() !== '') {
+    return queryMerchant.trim();
+  }
 
-  const notesMerchant = paymentEntity?.notes?.merchant_id || paymentEntity?.notes?.userId || paymentEntity?.metadata?.merchant_id || body?.metadata?.merchant_id;
-  if (notesMerchant) return notesMerchant;
+  const headerMerchant = (request.headers['x-merchant-id'] as string) || (request.headers['x-safero-merchant-id'] as string);
+  if (headerMerchant && typeof headerMerchant === 'string' && headerMerchant.trim() !== '') {
+    return headerMerchant.trim();
+  }
+
+  const notesMerchant = paymentEntity?.notes?.merchant_id || paymentEntity?.notes?.merchantId || paymentEntity?.notes?.userId || paymentEntity?.metadata?.merchant_id || body?.metadata?.merchant_id;
+  if (notesMerchant && typeof notesMerchant === 'string' && notesMerchant.trim() !== '') {
+    return notesMerchant.trim();
+  }
 
   const accountId = body?.account_id || paymentEntity?.account_id || body?.account;
   if (accountId) {
@@ -184,8 +196,8 @@ async function processWebhookTransaction(opts: {
         }),
       ],
     );
-  } catch (dbErr) {
-    logger.warn({ dbErr }, 'Non-blocking Supabase transaction insert fallback');
+  } catch (dbErr: any) {
+    logger.error({ err: dbErr?.message || dbErr }, 'Failed to insert live transaction into Postgres');
   }
 
   const auditEntry: WebhookLogEntry = {
@@ -247,8 +259,11 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // ── 2. POST /api/v1/webhooks/razorpay — Razorpay Webhook Receiver ──────
-  app.post('/webhooks/razorpay', async (request: FastifyRequest, reply: FastifyReply) => {
+  // ── 2. POST /webhooks/razorpay & /webhooks/razorpay/:merchantId ──────
+  const handleRazorpayWebhook = async (
+    request: FastifyRequest<{ Params: { merchantId?: string } }>,
+    reply: FastifyReply,
+  ) => {
     const rawBody = JSON.stringify(request.body || {});
     const signature = (request.headers['x-razorpay-signature'] as string) || '';
     const secret = config.razorpay.webhookSecret || process.env.RAZORPAY_WEBHOOK_SECRET || '';
@@ -309,10 +324,16 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       signatureVerified,
       reply,
     });
-  });
+  };
 
-  // ── 3. POST /api/v1/webhooks/stripe — Stripe Webhook Receiver ──────────
-  app.post('/webhooks/stripe', async (request: FastifyRequest, reply: FastifyReply) => {
+  app.post('/webhooks/razorpay', handleRazorpayWebhook);
+  app.post('/webhooks/razorpay/:merchantId', handleRazorpayWebhook);
+
+  // ── 3. POST /webhooks/stripe & /webhooks/stripe/:merchantId ──────────
+  const handleStripeWebhook = async (
+    request: FastifyRequest<{ Params: { merchantId?: string } }>,
+    reply: FastifyReply,
+  ) => {
     const body = (request.body as any) || {};
     const event = body.type || 'payment_intent.succeeded';
     const obj = body.data?.object || body;
@@ -348,10 +369,16 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       signatureVerified: Boolean(request.headers['stripe-signature']),
       reply,
     });
-  });
+  };
 
-  // ── 4. POST /api/v1/webhooks/cashfree — Cashfree Webhook Receiver ───────
-  app.post('/webhooks/cashfree', async (request: FastifyRequest, reply: FastifyReply) => {
+  app.post('/webhooks/stripe', handleStripeWebhook);
+  app.post('/webhooks/stripe/:merchantId', handleStripeWebhook);
+
+  // ── 4. POST /webhooks/cashfree & /webhooks/cashfree/:merchantId ───────
+  const handleCashfreeWebhook = async (
+    request: FastifyRequest<{ Params: { merchantId?: string } }>,
+    reply: FastifyReply,
+  ) => {
     const body = (request.body as any) || {};
     const event = body.type || body.event || 'PAYMENT_SUCCESS_WEBHOOK';
     const payment = body.data?.payment || body.data?.order || body.data || body;
@@ -387,10 +414,16 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       signatureVerified: Boolean(request.headers['x-webhook-signature']),
       reply,
     });
-  });
+  };
 
-  // ── 5. POST /api/v1/webhooks/custom — Generic Custom JSON Ingestion ────
-  app.post('/webhooks/custom', async (request: FastifyRequest, reply: FastifyReply) => {
+  app.post('/webhooks/cashfree', handleCashfreeWebhook);
+  app.post('/webhooks/cashfree/:merchantId', handleCashfreeWebhook);
+
+  // ── 5. POST /webhooks/custom & /webhooks/custom/:merchantId ────
+  const handleCustomWebhook = async (
+    request: FastifyRequest<{ Params: { merchantId?: string } }>,
+    reply: FastifyReply,
+  ) => {
     const body = (request.body as any) || {};
     const paymentId = body.payment_id || body.transaction_id || `txn_${crypto.randomUUID().slice(0, 10)}`;
     const merchantId = await resolveWebhookMerchantId(request, body, body);
@@ -422,7 +455,10 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       signatureVerified: true,
       reply,
     });
-  });
+  };
+
+  app.post('/webhooks/custom', handleCustomWebhook);
+  app.post('/webhooks/custom/:merchantId', handleCustomWebhook);
 
   // ── 6. POST /api/v1/webhooks/simulate — Authenticated Merchant Simulator
   app.post(

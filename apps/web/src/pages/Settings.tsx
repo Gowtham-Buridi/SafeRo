@@ -23,6 +23,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { api, API_BASE_URL } from '../lib/api.ts';
+import { useAuth } from '../lib/auth.tsx';
 
 function SettingsSection({
   title,
@@ -65,7 +66,12 @@ export function Settings() {
   const [costErrors, setCostErrors] = useState<{ fp?: string; fraud?: string; review?: string }>({});
   const [costSaved, setCostSaved] = useState(false);
 
-  const webhookUrl = `${API_BASE_URL}/webhooks/${selectedGateway}`;
+  const { user } = useAuth();
+  const merchantId = user?.merchantId || user?.id || 'm_ecommerce_01';
+
+  // Construct dedicated per-merchant webhook URL (POST /api/v1/webhooks/:gateway/:merchantId)
+  const baseApi = API_BASE_URL.endsWith('/api/v1') ? API_BASE_URL : `${API_BASE_URL}/api/v1`;
+  const webhookUrl = `${baseApi}/webhooks/${selectedGateway}/${merchantId}`;
   const webhookSecret = 'whsec_safero_live_948271049281';
 
   const copyText = (text: string, type: 'url' | 'secret') => {
@@ -163,9 +169,14 @@ export function Settings() {
               {/* Webhook URL Field */}
               <div className="rounded-2xl border border-slate-200/90 bg-slate-50/50 p-4 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500">
-                    Production {selectedGateway.toUpperCase()} Webhook URL
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                      Dedicated {selectedGateway.toUpperCase()} Webhook URL
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded font-medium">
+                      Tenant: {merchantId}
+                    </span>
+                  </div>
                   <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                     Real-time ML Active
                   </span>
