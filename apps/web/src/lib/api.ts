@@ -288,5 +288,11 @@ export const api = {
     }),
 
   getWebhookHistory: () => fetchJson<any[]>('/webhooks/history'),
+  getMerchantProfile: () => fetchJson<any>('/merchants/me'),
+  updateMerchantGatewayAccount: (razorpay_merchant_id: string) =>
+    fetchJson<any>('/merchants/me/gateway-account', {
+      method: 'PUT',
+      body: JSON.stringify({ razorpay_merchant_id }),
+    }),
 };
 

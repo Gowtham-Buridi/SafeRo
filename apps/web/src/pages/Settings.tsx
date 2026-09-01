@@ -85,6 +85,10 @@ export function Settings() {
     }
   };
 
+  const [gatewayAccountId, setGatewayAccountId] = useState('');
+  const [savingGatewayAccount, setSavingGatewayAccount] = useState(false);
+  const [gatewayAccountSaved, setGatewayAccountSaved] = useState(false);
+
   const fetchHistory = () => {
     setLoadingHistory(true);
     api
@@ -96,7 +100,29 @@ export function Settings() {
 
   useEffect(() => {
     fetchHistory();
+    api.getMerchantProfile()
+      .then((data) => {
+        if (data?.razorpay_merchant_id) {
+          setGatewayAccountId(data.razorpay_merchant_id);
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  const handleSaveGatewayAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!gatewayAccountId.trim()) return;
+    setSavingGatewayAccount(true);
+    try {
+      await api.updateMerchantGatewayAccount(gatewayAccountId.trim());
+      setGatewayAccountSaved(true);
+      setTimeout(() => setGatewayAccountSaved(false), 3000);
+    } catch (err) {
+      console.error('Failed to link gateway account:', err);
+    } finally {
+      setSavingGatewayAccount(false);
+    }
+  };
 
   const handleSaveCostParams = (e: React.FormEvent) => {
     e.preventDefault();
@@ -245,6 +271,45 @@ export function Settings() {
                     )}
                   </Button>
                 </div>
+              </div>
+
+              {/* Optional Gateway Merchant Account ID Field */}
+              <div className="rounded-2xl border border-slate-200/90 bg-slate-50/50 p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                    Linked {selectedGateway.toUpperCase()} Account ID (Optional Fallback)
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">
+                    Auto-links generic webhooks via account_id
+                  </span>
+                </div>
+                <form onSubmit={handleSaveGatewayAccount} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="e.g. acc_N18y7sK91s or merchant_id"
+                    value={gatewayAccountId}
+                    onChange={(e) => setGatewayAccountId(e.target.value)}
+                    className="flex-1 font-mono text-xs bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                  <Button
+                    type="submit"
+                    variant="secondary"
+                    size="sm"
+                    disabled={savingGatewayAccount}
+                    className="cursor-pointer shrink-0 font-bold"
+                  >
+                    {gatewayAccountSaved ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-emerald-600 mr-1" />
+                        <span className="text-emerald-700">Linked</span>
+                      </>
+                    ) : savingGatewayAccount ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <span>Link Account</span>
+                    )}
+                  </Button>
+                </form>
               </div>
             </div>
 
