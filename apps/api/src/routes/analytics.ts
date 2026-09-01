@@ -2,9 +2,10 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { dataStore } from '../dataService.js';
 import { pool } from '../database.js';
 import { logger } from '../logger.js';
-import { getAuthContext } from './auth.js';
+import { authenticate, getAuthContext } from './auth.js';
 
 export async function analyticsRoutes(app: FastifyInstance) {
+  app.addHook('preHandler', authenticate);
   // GET /api/v1/analytics/summary
   app.get('/summary', async (req: FastifyRequest, reply: FastifyReply) => {
     const authCtx = getAuthContext(req);

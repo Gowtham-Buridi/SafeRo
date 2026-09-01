@@ -3,9 +3,10 @@ import { dataStore } from '../dataService.js';
 import { pool } from '../database.js';
 import { callMlScore, MlServiceError } from '../mlClient.js';
 import { logger } from '../logger.js';
-import { getAuthContext } from './auth.js';
+import { authenticate, getAuthContext } from './auth.js';
 
 export async function graphRoutes(app: FastifyInstance) {
+  app.addHook('preHandler', authenticate);
   // GET /api/v1/graph/relationships
   app.get('/relationships', async (req: FastifyRequest, reply: FastifyReply) => {
     const authCtx = getAuthContext(req);

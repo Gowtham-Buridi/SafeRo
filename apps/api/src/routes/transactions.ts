@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { dataStore } from '../dataService.js';
 import { pool } from '../database.js';
 import { logger } from '../logger.js';
-import { getAuthContext } from './auth.js';
+import { authenticate, getAuthContext } from './auth.js';
 import { maskEmail } from '../lib/pii.js';
 
 // ── Demo-mode risk scorer (uses pre-computed batch scores from offline pipeline) ──
@@ -39,6 +39,7 @@ function computeDemoTransactionRisk(txn: any): { score: number; riskPercent: str
 }
 
 export async function transactionRoutes(app: FastifyInstance) {
+  app.addHook('preHandler', authenticate);
 
   // ── GET /api/v1/transactions ────────────────────────────────────────────
   app.get('/', async (req: FastifyRequest, reply: FastifyReply) => {

@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { dataStore } from '../dataService.js';
 import { logger } from '../logger.js';
 import * as caseStore from '../caseStore.js';
-import { getAuthContext } from './auth.js';
+import { authenticate, getAuthContext } from './auth.js';
 
 // ── Severity resolver ───────────────────────────────────────────
 function computeSeverity(score: number): 'critical' | 'high' | 'medium' | 'low' {
@@ -56,6 +56,7 @@ async function dispatchMerchantWebhook(caseData: any, actor: string): Promise<vo
 }
 
 export async function caseRoutes(app: FastifyInstance) {
+  app.addHook('preHandler', authenticate);
 
   // ── GET /api/v1/cases ────────────────────────────────────────
   app.get('/', async (req: FastifyRequest, reply: FastifyReply) => {
