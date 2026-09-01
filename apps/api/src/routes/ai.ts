@@ -3,7 +3,7 @@ import { config } from '../config.js';
 import { dataStore } from '../dataService.js';
 import { pool } from '../database.js';
 import { logger } from '../logger.js';
-import { getAuthContext, type AuthContext } from './auth.js';
+import { authenticate, getAuthContext, type AuthContext } from './auth.js';
 
 import { maskEmail } from '../lib/pii.js';
 
@@ -58,59 +58,59 @@ async function buildSystemPrompt(authCtx: AuthContext): Promise<string> {
 
       // Fetch live cases
       const casesRes = await pool.query(
-        `SELECT id, title, severity, risk_score, status
-         FROM risk_cases
+        `SELECT * FROM risk_cases
          WHERE (evidence->>'merchant_id' = $1 OR merchant_id::text = $1)
            AND status != 'dismissed'
-         LIMIT 5`,
+         ORDER BY risk_score DESC LIMIT 5`,
         [authCtx.merchantId],
       );
-      openCaseCount = casesRes.rows.length;
-      casesSummary = casesRes.rows
-        .map((c: any) => `  - [${(c.severity || 'high').toUpperCase()}] ${c.title} (risk: ${(parseFloat(c.risk_score || 0.85) * 100).toFixed(0)}%)`)
+      const openCases = casesRes.rows.filter((c: any) => c.status === 'open' || c.status === 'investigating');
+      openCaseCount = openCases.length;
+
+      casesSummary = openCases
+        .map((c: any) => `  - [${c.severity?.toUpperCase() || 'HIGH'}] ${c.title} (risk: ${((parseFloat(c.risk_score || 0.8)) * 100).toFixed(0)}%)`)
         .join('\n');
 
       // Fetch live rings
       const ringsRes = await pool.query(
-        `SELECT metadata->>'device_id' as device_id, COUNT(*) as txn_count, SUM(amount) as ring_volume
+        `SELECT metadata->>'device_id' as device, COUNT(*) as tx_count, array_agg(DISTINCT metadata->>'customer_id') as customers
          FROM transactions
-         WHERE (metadata->>'is_abuse_ring')::boolean = true
-           AND (metadata->>'merchant_id' = $1 OR merchant_id::text = $1)
-         GROUP BY metadata->>'device_id'
-         LIMIT 5`,
+         WHERE (metadata->>'merchant_id' = $1 OR merchant_id::text = $1)
+           AND (metadata->>'is_abuse_ring')::boolean = true
+         GROUP BY metadata->>'device_id'`,
         [authCtx.merchantId],
       );
       activeRingCount = ringsRes.rows.length;
-      ringsSummary = ringsRes.rows
-        .map((r: any, idx: number) => `  - Live Cluster #${idx + 1}: ${r.txn_count} transactions, device ${r.device_id?.slice(0, 12)}, exposure ₹${parseFloat(r.ring_volume || 0).toLocaleString()}`)
+      ringsSummary = ringsRes.rows.slice(0, 5)
+        .map((r: any, idx: number) => `  - Live Ring #${idx + 1}: ${r.customers?.length || 1} accounts, device fingerprint ${r.device?.slice(0, 12)}`)
         .join('\n');
-    } catch (err) {
-      logger.warn({ err }, 'Failed to load live AI telemetry context from Postgres');
+    } catch (dbErr) {
+      logger.warn({ dbErr }, 'Non-blocking DB query in AI system prompt construction');
     }
   }
 
-  return `You are SafeRo AI — a sovereign fraud risk analyst embedded in the SafeRo merchant risk intelligence platform.
+  const fraudRate = totalTxns > 0 ? ((fraudTxns / totalTxns) * 100).toFixed(2) : '0.00';
+  const disputeRate = totalTxns > 0 ? ((disputedTxns / totalTxns) * 100).toFixed(2) : '0.00';
 
-## Authenticated Merchant Scope
-- **User Email:** ${maskEmail(authCtx.userEmail)}
-- **Merchant Tenant ID:** ${authCtx.merchantId}
-- **Environment:** ${authCtx.isDemo ? 'Demo Testbed Dataset' : 'Live Merchant Store'}
+  return `You are SafeRo AI Risk Forensics Copilot — an autonomous fraud intelligence and dispute mitigation assistant embedded in the SafeRo Sovereign Merchant Risk Intelligence platform.
 
-## Real Backend Telemetry (Strict Ground Truth for this Merchant):
-- **Total transactions analyzed:** ${totalTxns.toLocaleString()}
-- **Total transaction volume:** ₹${(totalVolume / 1_000_000).toFixed(2)}M
-- **Flagged / Abuse Ring transactions:** ${fraudTxns}
-- **Disputed / Chargeback transactions:** ${disputedTxns}
-- **Active abuse ring clusters detected:** ${activeRingCount}
-- **Open risk cases:** ${openCaseCount}
+OPERATING CONTEXT & ACTIVE WORKSPACE METRICS:
+- Environment: ${authCtx.isDemo ? 'DEMO TESTBED (Offline Sandbox Simulation)' : 'LIVE STORE (Production PostgreSQL Telemetry)'}
+- Merchant Tenant ID: ${authCtx.merchantId}
+- Total Monitored Transactions: ${totalTxns.toLocaleString()}
+- Total Volume: ₹${totalVolume.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+- Flagged Abuse Ring Transactions: ${fraudTxns} (${fraudRate}% of total volume)
+- Disputed Chargeback Count: ${disputedTxns} (${disputeRate}%)
+- Active Escalated Cases: ${openCaseCount}
+- Active Coordinated Abuse Rings: ${activeRingCount}
 
-## Active Ring Clusters:
-${ringsSummary || '  - No active abuse clusters detected in this merchant workspace'}
+ACTIVE ABUSE CLUSTERS (REAL TIME):
+${ringsSummary || '  No active coordinated abuse rings detected for this store workspace.'}
 
-## Open Risk Cases:
-${casesSummary || '  - No active risk cases in this merchant workspace'}
+TOP OPEN RISK INVESTIGATION CASES:
+${casesSummary || '  No open investigation cases currently pending review.'}
 
-## CRITICAL AI GUARDRAILS (MUST STRICTLY FOLLOW):
+STRICT FORENSIC DIRECTIVES:
 1. **GROUNDED TRUTH ONLY**: You MUST only explain, analyze, and reason using the REAL telemetry, risk scores, signals, and evidence provided above for the CURRENT authenticated user (${authCtx.merchantId}). NEVER invent fake probabilities, hallucinate transaction counts, or fabricate signals.
 2. **MULTI-TENANT DATA ISOLATION & REFUSAL**: If the user asks about an entity, customer ID, device fingerprint, transaction ID, or abuse ring that does NOT exist in their workspace evidence above, you MUST explicitly state that no such entity exists within their store workspace and refuse to answer. NEVER disclose or speculate about data outside their tenant.
 3. **STRUCTURED TRIAGE ACTIONS**: When responding to risk questions or case reviews, provide clear forensic insights and concise markdown checklists:
@@ -122,6 +122,7 @@ ${casesSummary || '  - No active risk cases in this merchant workspace'}
 
 // ─── Groq AI Chat Route ────────────────────────────────────────
 export async function aiRoutes(app: FastifyInstance) {
+  app.addHook('preHandler', authenticate);
   app.post('/chat', async (
     req: FastifyRequest<{
       Body: {

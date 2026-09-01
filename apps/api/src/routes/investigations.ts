@@ -3,10 +3,11 @@ import { dataStore } from '../dataService.js';
 import { pool } from '../database.js';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
-import { getAuthContext } from './auth.js';
+import { authenticate, getAuthContext } from './auth.js';
 import { maskEmail } from '../lib/pii.js';
 
 export async function investigationRoutes(app: FastifyInstance) {
+  app.addHook('preHandler', authenticate);
   // POST /api/v1/investigations/query
   app.post('/query', async (req: FastifyRequest<{ Body: { query: string; entity_type?: string } }>, reply: FastifyReply) => {
     const authCtx = getAuthContext(req);
