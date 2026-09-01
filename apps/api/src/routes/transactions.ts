@@ -317,7 +317,20 @@ export async function transactionRoutes(app: FastifyInstance) {
           risk_percent: row.risk_score != null ? `${(row.risk_score * 100).toFixed(1)}%` : null,
           action: row.action,
           model_version: row.model_version || 'v1.0.0-realtime',
-          signals: row.signals_json ?? [],
+          signals: Array.isArray(row.signals_json)
+            ? row.signals_json.map((s: any) => {
+                if (typeof s === 'string') {
+                  const isClean = s.toLowerCase().includes('clean') || s.toLowerCase().includes('normal') || s.toLowerCase().includes('legitimate') || s.toLowerCase().includes('no abuse');
+                  return {
+                    signal_type: isClean ? 'clean_telemetry' : 'detected_signal',
+                    severity: isClean ? 'info' : 'medium',
+                    polarity: isClean ? 'positive' : 'negative',
+                    message: s,
+                  };
+                }
+                return s;
+              })
+            : [],
           related_transactions: relatedRes.rows.map((r: any) => ({
             ...r,
             amount: parseFloat(r.amount),

@@ -94,12 +94,33 @@ function ForensicDossierPanel({
     ? 'Elevated Risk'
     : 'Low Risk';
 
+  // Helper to normalize signal objects or string arrays
+  const normalizeSignal = (raw: any) => {
+    if (typeof raw === 'string') {
+      const isClean = raw.toLowerCase().includes('clean') || raw.toLowerCase().includes('normal') || raw.toLowerCase().includes('legitimate') || raw.toLowerCase().includes('no abuse');
+      return {
+        signal_type: isClean ? 'clean_telemetry' : 'detected_signal',
+        severity: isClean ? 'info' : 'medium',
+        polarity: isClean ? 'positive' : 'negative',
+        message: raw,
+      };
+    }
+    return {
+      signal_type: raw?.signal_type || raw?.type || 'risk_signal',
+      severity: raw?.severity || 'medium',
+      polarity: raw?.polarity || (raw?.severity === 'info' ? 'positive' : 'negative'),
+      message: raw?.message || raw?.details || (typeof raw === 'object' ? JSON.stringify(raw) : String(raw || '')),
+    };
+  };
+
   // Polarity helper for signal styling
-  const getSignalStyle = (s: any) => {
+  const getSignalStyle = (rawSignal: any) => {
+    const s = normalizeSignal(rawSignal);
     const isPositive = s.polarity === 'positive' ||
       s.severity === 'info' ||
       s.signal_type?.includes('legitimate') ||
       s.signal_type?.includes('reputable') ||
+      s.signal_type?.includes('clean') ||
       s.signal_type?.includes('normal');
 
     const isWarning = s.polarity === 'warning' ||
@@ -682,7 +703,8 @@ function ForensicDossierPanel({
                   polarity: 'positive',
                   message: 'Clean hardware fingerprint, verified IP geolocation, zero proxy collision detected.',
                 },
-              ])).map((s: any, idx: number) => {
+              ])).map((rawSignal: any, idx: number) => {
+                const s = normalizeSignal(rawSignal);
                 const style = getSignalStyle(s);
                 return (
                   <div
@@ -692,7 +714,7 @@ function ForensicDossierPanel({
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <p className={`font-bold capitalize flex items-center gap-1.5 ${style.titleColor}`}>
                         {style.icon}
-                        <span>{s.signal_type.replace(/_/g, ' ')}</span>
+                        <span>{(s.signal_type || 'Risk Signal').replace(/_/g, ' ')}</span>
                       </p>
                       {style.badge}
                     </div>
