@@ -150,10 +150,10 @@ Evaluated strictly on an independent, held-out test split ($N = 300$ samples, 10
 ### Multi-Gateway Webhook Ingestion
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `POST` | `/api/v1/webhooks/razorpay` | Ingest Razorpay payments (`X-Razorpay-Signature` HMAC verified) |
-| `POST` | `/api/v1/webhooks/stripe` | Ingest Stripe events (`Stripe-Signature` verified) |
-| `POST` | `/api/v1/webhooks/cashfree` | Ingest Cashfree webhooks (`x-webhook-signature` verified) |
-| `POST` | `/api/v1/webhooks/custom` | Generic custom JSON payment stream for direct merchant integration |
+| `POST` | `/api/v1/webhooks/razorpay[/:merchantId]` | Ingest Razorpay payments (`X-Razorpay-Signature` HMAC verified with tenant routing) |
+| `POST` | `/api/v1/webhooks/stripe[/:merchantId]` | Ingest Stripe events (`Stripe-Signature` verified with tenant routing) |
+| `POST` | `/api/v1/webhooks/cashfree[/:merchantId]` | Ingest Cashfree webhooks (`x-webhook-signature` verified with tenant routing) |
+| `POST` | `/api/v1/webhooks/custom[/:merchantId]` | Generic custom JSON payment stream for direct merchant integration |
 | `POST` | `/api/v1/webhooks/simulate` | Authenticated merchant testbed simulator for live transaction testing |
 | `GET` | `/api/v1/webhooks/history` | Real-time buffer of last 50 ingested and scored webhook events |
 
