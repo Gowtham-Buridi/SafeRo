@@ -55,7 +55,9 @@ export function Dashboard() {
   const [selectedGateway, setSelectedGateway] = useState<'razorpay' | 'stripe' | 'cashfree' | 'custom'>('razorpay');
   const [copiedUrl, setCopiedUrl] = useState(false);
 
-  const webhookUrl = `${API_BASE_URL}/webhooks/${selectedGateway}`;
+  const merchantId = user?.merchantId || user?.id || 'm_ecommerce_01';
+  const baseApi = API_BASE_URL.endsWith('/api/v1') ? API_BASE_URL : `${API_BASE_URL}/api/v1`;
+  const webhookUrl = `${baseApi}/webhooks/${selectedGateway}/${merchantId}`;
 
   const copyWebhook = () => {
     navigator.clipboard.writeText(webhookUrl);

@@ -5,13 +5,15 @@ import { api, API_BASE_URL } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 
 export function Analytics() {
-  const { environment, setEnvironment } = useAuth();
+  const { user, environment, setEnvironment } = useAuth();
   const [modelPerf, setModelPerf] = useState<any>(null);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [copiedUrl, setCopiedUrl] = useState(false);
 
-  const webhookUrl = `${API_BASE_URL}/webhooks/razorpay`;
+  const merchantId = user?.merchantId || user?.id || 'm_ecommerce_01';
+  const baseApi = API_BASE_URL.endsWith('/api/v1') ? API_BASE_URL : `${API_BASE_URL}/api/v1`;
+  const webhookUrl = `${baseApi}/webhooks/razorpay/${merchantId}`;
   const isLive = environment === 'live';
 
   const fetchAnalytics = () => {
