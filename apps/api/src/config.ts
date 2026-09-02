@@ -29,6 +29,14 @@ export const config = {
     webhookSecret: process.env['RAZORPAY_WEBHOOK_SECRET'] || '',
   },
 
+  stripe: {
+    webhookSecret: process.env['STRIPE_WEBHOOK_SECRET'] || '',
+  },
+
+  cashfree: {
+    webhookSecret: process.env['CASHFREE_WEBHOOK_SECRET'] || '',
+  },
+
   mlService: {
     url: process.env['ML_SERVICE_URL'] || 'http://localhost:8000',
   },

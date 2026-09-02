@@ -264,19 +264,30 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     request: FastifyRequest<{ Params: { merchantId?: string } }>,
     reply: FastifyReply,
   ) => {
-    const rawBody = JSON.stringify(request.body || {});
+    const rawBody = (request as any).rawBody || JSON.stringify(request.body || {});
     const signature = (request.headers['x-razorpay-signature'] as string) || '';
     const secret = config.razorpay.webhookSecret || process.env.RAZORPAY_WEBHOOK_SECRET || '';
 
     let signatureVerified = false;
 
-    if (secret && signature) {
+    if (secret) {
+      if (!signature) {
+        logger.warn('⚠️ Razorpay Webhook missing X-Razorpay-Signature header');
+        return reply.status(401).send({
+          success: false,
+          error: { code: 'INVALID_SIGNATURE', message: 'Missing Razorpay signature header' },
+        });
+      }
+
       const expectedSignature = crypto
         .createHmac('sha256', secret)
         .update(rawBody)
         .digest('hex');
 
-      if (crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(signature))) {
+      if (
+        expectedSignature.length === signature.length &&
+        crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(signature))
+      ) {
         signatureVerified = true;
       } else {
         logger.warn({ signature }, '⚠️ Razorpay Webhook HMAC signature verification failed');
@@ -286,7 +297,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
         });
       }
     } else {
-      signatureVerified = true;
+      signatureVerified = false;
     }
 
     const body = (request.body as any) || {};
@@ -334,6 +345,75 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     request: FastifyRequest<{ Params: { merchantId?: string } }>,
     reply: FastifyReply,
   ) => {
+    const rawBody = (request as any).rawBody || JSON.stringify(request.body || {});
+    const sigHeader = (request.headers['stripe-signature'] as string) || '';
+    const secret = (config as any).stripe?.webhookSecret || process.env.STRIPE_WEBHOOK_SECRET || '';
+
+    let signatureVerified = false;
+
+    if (secret) {
+      if (!sigHeader) {
+        logger.warn('⚠️ Stripe Webhook missing Stripe-Signature header');
+        return reply.status(401).send({
+          success: false,
+          error: { code: 'INVALID_SIGNATURE', message: 'Missing Stripe-Signature header' },
+        });
+      }
+
+      const parts = sigHeader.split(',');
+      let timestampStr = '';
+      const v1Signatures: string[] = [];
+
+      for (const part of parts) {
+        const [key, val] = part.trim().split('=');
+        if (key === 't' && val) timestampStr = val;
+        else if (key === 'v1' && val) v1Signatures.push(val);
+      }
+
+      if (!timestampStr || v1Signatures.length === 0) {
+        logger.warn({ sigHeader }, '⚠️ Stripe Webhook signature header malformed');
+        return reply.status(401).send({
+          success: false,
+          error: { code: 'INVALID_SIGNATURE', message: 'Stripe signature header format invalid' },
+        });
+      }
+
+      const timestamp = parseInt(timestampStr, 10);
+      const now = Math.floor(Date.now() / 1000);
+      if (isNaN(timestamp) || Math.abs(now - timestamp) > 300) {
+        logger.warn({ timestamp, now }, '⚠️ Stripe Webhook timestamp outside 5-minute tolerance window');
+        return reply.status(401).send({
+          success: false,
+          error: { code: 'EXPIRED_SIGNATURE', message: 'Stripe webhook timestamp expired (replay attack tolerance exceeded)' },
+        });
+      }
+
+      const signedPayload = `${timestampStr}.${rawBody}`;
+      const expectedSig = crypto
+        .createHmac('sha256', secret)
+        .update(signedPayload)
+        .digest('hex');
+
+      const isValid = v1Signatures.some((v1) => {
+        return (
+          v1.length === expectedSig.length &&
+          crypto.timingSafeEqual(Buffer.from(v1), Buffer.from(expectedSig))
+        );
+      });
+
+      if (isValid) {
+        signatureVerified = true;
+      } else {
+        logger.warn({ sigHeader }, '⚠️ Stripe Webhook HMAC signature mismatch');
+        return reply.status(401).send({
+          success: false,
+          error: { code: 'INVALID_SIGNATURE', message: 'Stripe signature verification failed' },
+        });
+      }
+    } else {
+      signatureVerified = false;
+    }
+
     const body = (request.body as any) || {};
     const event = body.type || 'payment_intent.succeeded';
     const obj = body.data?.object || body;
@@ -366,7 +446,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       ipAddress,
       customerId,
       event,
-      signatureVerified: Boolean(request.headers['stripe-signature']),
+      signatureVerified,
       reply,
     });
   };
@@ -379,6 +459,64 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     request: FastifyRequest<{ Params: { merchantId?: string } }>,
     reply: FastifyReply,
   ) => {
+    const rawBody = (request as any).rawBody || JSON.stringify(request.body || {});
+    const signature = (request.headers['x-webhook-signature'] as string) || (request.headers['x-cashfree-signature'] as string) || '';
+    const timestampStr = (request.headers['x-webhook-timestamp'] as string) || (request.headers['x-cashfree-timestamp'] as string) || '';
+    const secret = (config as any).cashfree?.webhookSecret || process.env.CASHFREE_WEBHOOK_SECRET || '';
+
+    let signatureVerified = false;
+
+    if (secret) {
+      if (!signature) {
+        logger.warn('⚠️ Cashfree Webhook missing x-webhook-signature header');
+        return reply.status(401).send({
+          success: false,
+          error: { code: 'INVALID_SIGNATURE', message: 'Missing Cashfree signature header' },
+        });
+      }
+
+      if (timestampStr) {
+        const timestamp = parseInt(timestampStr, 10);
+        const now = Math.floor(Date.now() / 1000);
+        if (!isNaN(timestamp) && Math.abs(now - timestamp) > 300) {
+          logger.warn({ timestamp, now }, '⚠️ Cashfree Webhook timestamp outside 5-minute tolerance window');
+          return reply.status(401).send({
+            success: false,
+            error: { code: 'EXPIRED_SIGNATURE', message: 'Cashfree webhook timestamp expired' },
+          });
+        }
+      }
+
+      const payloadToSign = timestampStr ? `${timestampStr}${rawBody}` : rawBody;
+      const expectedBase64 = crypto
+        .createHmac('sha256', secret)
+        .update(payloadToSign)
+        .digest('base64');
+      const expectedHex = crypto
+        .createHmac('sha256', secret)
+        .update(payloadToSign)
+        .digest('hex');
+
+      const matchesBase64 =
+        expectedBase64.length === signature.length &&
+        crypto.timingSafeEqual(Buffer.from(expectedBase64), Buffer.from(signature));
+      const matchesHex =
+        expectedHex.length === signature.length &&
+        crypto.timingSafeEqual(Buffer.from(expectedHex), Buffer.from(signature));
+
+      if (matchesBase64 || matchesHex) {
+        signatureVerified = true;
+      } else {
+        logger.warn({ signature }, '⚠️ Cashfree Webhook HMAC signature verification failed');
+        return reply.status(401).send({
+          success: false,
+          error: { code: 'INVALID_SIGNATURE', message: 'Cashfree signature verification failed' },
+        });
+      }
+    } else {
+      signatureVerified = false;
+    }
+
     const body = (request.body as any) || {};
     const event = body.type || body.event || 'PAYMENT_SUCCESS_WEBHOOK';
     const payment = body.data?.payment || body.data?.order || body.data || body;
@@ -411,7 +549,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       ipAddress,
       customerId,
       event,
-      signatureVerified: Boolean(request.headers['x-webhook-signature']),
+      signatureVerified,
       reply,
     });
   };
@@ -424,9 +562,42 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     request: FastifyRequest<{ Params: { merchantId?: string } }>,
     reply: FastifyReply,
   ) => {
+    const rawBody = (request as any).rawBody || JSON.stringify(request.body || {});
     const body = (request.body as any) || {};
-    const paymentId = body.payment_id || body.transaction_id || `txn_${crypto.randomUUID().slice(0, 10)}`;
+    const signature = (request.headers['x-webhook-signature'] as string) || (request.headers['x-custom-signature'] as string) || '';
     const merchantId = await resolveWebhookMerchantId(request, body, body);
+    const customSecret = process.env.CUSTOM_WEBHOOK_SECRET || '';
+
+    let signatureVerified = false;
+
+    if (customSecret) {
+      if (!signature) {
+        logger.warn({ merchantId }, '⚠️ Custom Webhook missing signature header when secret is configured');
+        return reply.status(401).send({
+          success: false,
+          error: { code: 'INVALID_SIGNATURE', message: 'Missing custom webhook signature header' },
+        });
+      }
+
+      const expectedHex = crypto.createHmac('sha256', customSecret).update(rawBody).digest('hex');
+      if (
+        expectedHex.length === signature.length &&
+        crypto.timingSafeEqual(Buffer.from(expectedHex), Buffer.from(signature))
+      ) {
+        signatureVerified = true;
+      } else {
+        logger.warn({ signature, merchantId }, '⚠️ Custom Webhook HMAC signature verification failed');
+        return reply.status(401).send({
+          success: false,
+          error: { code: 'INVALID_SIGNATURE', message: 'Custom webhook signature verification failed' },
+        });
+      }
+    } else {
+      signatureVerified = false;
+      logger.info({ merchantId }, 'Custom webhook ingested unverified — no secret configured');
+    }
+
+    const paymentId = body.payment_id || body.transaction_id || `txn_${crypto.randomUUID().slice(0, 10)}`;
     const amountInr = Number(body.amount || 1000);
     const currency = (body.currency || 'INR').toUpperCase();
     const method = (body.payment_method || body.method || 'card').toLowerCase();
@@ -452,7 +623,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       ipAddress,
       customerId,
       event: 'custom.transaction_ingested',
-      signatureVerified: true,
+      signatureVerified,
       reply,
     });
   };

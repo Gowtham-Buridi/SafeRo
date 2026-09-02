@@ -59,6 +59,7 @@ export async function buildApp() {
 
   // ─── Content Type Parsers ────────────────────────────────────
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+    (req as any).rawBody = body;
     if (!body || (typeof body === 'string' && body.trim() === '')) {
       done(null, {});
       return;
