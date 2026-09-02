@@ -527,8 +527,6 @@ export function AbuseRings() {
                   </div>
                 </div>
               )}
-            </>
-          )}
 
           {/* Interactive Selected Node Inspector Drawer */}
           {selectedNode && (
@@ -611,30 +609,31 @@ export function AbuseRings() {
                         <Fingerprint className="h-4 w-4" />
                         <span className="text-xs font-bold">Shared Device</span>
                       </div>
-                      <button
-                        onClick={() =>
-                          copyToClipboard(
-                            clusterDetail?.evidence?.shared_device || 'dev_cc6c9367',
-                            'dev'
-                          )
-                        }
-                        title="Copy Device ID"
-                        className="text-slate-400 hover:text-slate-600 cursor-pointer"
-                      >
-                        {copiedKey === 'dev' ? (
-                          <Check className="h-3.5 w-3.5 text-emerald-600" />
-                        ) : (
-                          <Copy className="h-3.5 w-3.5" />
-                        )}
-                      </button>
+                      {clusterDetail?.evidence?.shared_device && (
+                        <button
+                          onClick={() =>
+                            copyToClipboard(clusterDetail.evidence.shared_device, 'dev')
+                          }
+                          title="Copy Device ID"
+                          className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                        >
+                          {copiedKey === 'dev' ? (
+                            <Check className="h-3.5 w-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      )}
                     </div>
                     <p className="text-xs font-mono font-bold text-slate-800 truncate">
                       {clusterDetail?.evidence?.shared_device
                         ? `dev_${clusterDetail.evidence.shared_device.slice(0, 10)}...`
-                        : 'dev_cc6c9367...'}
+                        : 'No shared hardware detected'}
                     </p>
                     <p className="text-[11px] text-slate-500 leading-relaxed">
-                      100% collision rate across {clusterDetail?.member_count || 8} distinct buyer accounts.
+                      {clusterDetail?.evidence?.shared_device
+                        ? `100% collision rate across ${clusterDetail?.member_count || 0} distinct buyer accounts.`
+                        : 'No device collision detected across accounts.'}
                     </p>
                   </div>
 
@@ -645,30 +644,31 @@ export function AbuseRings() {
                         <Server className="h-4 w-4" />
                         <span className="text-xs font-bold">Shared VPN / Proxy</span>
                       </div>
-                      <button
-                        onClick={() =>
-                          copyToClipboard(
-                            clusterDetail?.evidence?.shared_ip || 'ip_68978888',
-                            'ip'
-                          )
-                        }
-                        title="Copy IP ID"
-                        className="text-slate-400 hover:text-slate-600 cursor-pointer"
-                      >
-                        {copiedKey === 'ip' ? (
-                          <Check className="h-3.5 w-3.5 text-emerald-600" />
-                        ) : (
-                          <Copy className="h-3.5 w-3.5" />
-                        )}
-                      </button>
+                      {clusterDetail?.evidence?.shared_ip && (
+                        <button
+                          onClick={() =>
+                            copyToClipboard(clusterDetail.evidence.shared_ip, 'ip')
+                          }
+                          title="Copy IP ID"
+                          className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                        >
+                          {copiedKey === 'ip' ? (
+                            <Check className="h-3.5 w-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      )}
                     </div>
                     <p className="text-xs font-mono font-bold text-slate-800 truncate">
                       {clusterDetail?.evidence?.shared_ip
                         ? `ip_${clusterDetail.evidence.shared_ip.slice(0, 10)}...`
-                        : 'ip_68978888...'}
+                        : 'No datacenter IP/proxy detected'}
                     </p>
                     <p className="text-[11px] text-slate-500 leading-relaxed">
-                      Coordinated burst transactions originating from a single datacenter IP subnet.
+                      {clusterDetail?.evidence?.shared_ip
+                        ? 'Coordinated burst transactions originating from a single datacenter IP subnet.'
+                        : 'Normal dispersed IP distribution observed.'}
                     </p>
                   </div>
 
@@ -679,30 +679,31 @@ export function AbuseRings() {
                         <CreditCard className="h-4 w-4" />
                         <span className="text-xs font-bold">Shared Payment Token</span>
                       </div>
-                      <button
-                        onClick={() =>
-                          copyToClipboard(
-                            clusterDetail?.evidence?.shared_pm || 'pm_37718982',
-                            'pm'
-                          )
-                        }
-                        title="Copy Payment Token"
-                        className="text-slate-400 hover:text-slate-600 cursor-pointer"
-                      >
-                        {copiedKey === 'pm' ? (
-                          <Check className="h-3.5 w-3.5 text-emerald-600" />
-                        ) : (
-                          <Copy className="h-3.5 w-3.5" />
-                        )}
-                      </button>
+                      {clusterDetail?.evidence?.shared_pm && (
+                        <button
+                          onClick={() =>
+                            copyToClipboard(clusterDetail.evidence.shared_pm, 'pm')
+                          }
+                          title="Copy Payment Token"
+                          className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                        >
+                          {copiedKey === 'pm' ? (
+                            <Check className="h-3.5 w-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      )}
                     </div>
                     <p className="text-xs font-mono font-bold text-slate-800 truncate">
                       {clusterDetail?.evidence?.shared_pm
                         ? `pm_${clusterDetail.evidence.shared_pm.slice(0, 10)}...`
-                        : 'pm_37718982...'}
+                        : 'No shared payment instruments'}
                     </p>
                     <p className="text-[11px] text-slate-500 leading-relaxed">
-                      Payment card token rotated across multiple simulated accounts.
+                      {clusterDetail?.evidence?.shared_pm
+                        ? 'Payment card token rotated across multiple simulated accounts.'
+                        : 'Clean independent payment instruments.'}
                     </p>
                   </div>
                 </div>
@@ -899,6 +900,8 @@ export function AbuseRings() {
               </div>
             )}
           </div>
+            </>
+          )}
         </div>
       </div>
 
