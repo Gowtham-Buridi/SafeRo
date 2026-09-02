@@ -740,11 +740,18 @@
       ],
       "audit_trail": [
         {
-          "id": "aud_1788323660109_a3vm",
-          "timestamp": "2026-09-02T04:34:20.109Z",
+          "id": "aud_1788325689062_y5ro",
+          "timestamp": "2026-09-02T05:08:09.062Z",
           "actor": "Analyst",
           "action": "Status → Confirmed",
           "details": "Case moved from confirmed to confirmed"
+        },
+        {
+          "id": "aud_1788323660109_a3vm",
+          "actor": "Analyst",
+          "action": "Status → Confirmed",
+          "details": "Case moved from confirmed to confirmed",
+          "timestamp": "2026-09-02T04:34:20.109Z"
         },
         {
           "id": "aud_1788322994426_asdt",
@@ -887,7 +894,7 @@
         "merchant_notified": false
       },
       "created_at": "2026-08-30T18:43:50.241Z",
-      "updated_at": "2026-09-02T04:34:20.951Z"
+      "updated_at": "2026-09-02T05:08:10.388Z"
     }
   ]
 }

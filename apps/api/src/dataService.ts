@@ -287,13 +287,13 @@ class DataStore {
       return baseCase;
     });
 
-    // Merge custom user-created cases (deduplicating by ID and Title)
+    // Merge custom user-created cases (deduplicating by ID and normalized Title)
     const seenIds = new Set<string>();
     const seenTitles = new Set<string>();
     const uniqueCustomCases: RiskCase[] = [];
 
     for (const c of this.caseOverrides.customCases || []) {
-      const titleKey = `${c.title}_${c.merchant_id || 'default'}`;
+      const titleKey = c.title?.toLowerCase().trim() || c.id;
       if (!seenIds.has(c.id) && !seenTitles.has(titleKey)) {
         seenIds.add(c.id);
         seenTitles.add(titleKey);
@@ -324,7 +324,7 @@ class DataStore {
 
   addCase(newCase: RiskCase): RiskCase {
     const existingIdx = this.cases.findIndex(
-      item => item.id === newCase.id || (item.title === newCase.title && item.merchant_id === newCase.merchant_id),
+      item => item.id === newCase.id || item.title?.toLowerCase().trim() === newCase.title?.toLowerCase().trim(),
     );
     if (existingIdx >= 0) {
       this.cases[existingIdx] = { ...this.cases[existingIdx], ...newCase };
