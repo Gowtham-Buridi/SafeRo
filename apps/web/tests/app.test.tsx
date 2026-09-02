@@ -48,6 +48,8 @@ vi.mock('../src/lib/api.ts', () => ({
     getModelPerformance: vi.fn().mockResolvedValue(null),
     queryInvestigation: vi.fn().mockResolvedValue(null),
     getWebhookHistory: vi.fn().mockResolvedValue([]),
+    getMerchantProfile: vi.fn().mockResolvedValue({ id: 'm_demo_001', razorpay_merchant_id: 'acc_demo_123' }),
+    updateMerchantGatewayAccount: vi.fn().mockResolvedValue({ success: true }),
     simulateWebhook: vi.fn().mockResolvedValue({ success: true }),
     login: vi.fn().mockResolvedValue({ success: true }),
     register: vi.fn().mockResolvedValue({ success: true }),

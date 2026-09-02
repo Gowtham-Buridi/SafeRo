@@ -612,6 +612,72 @@
   },
   "customCases": [
     {
+      "id": "case_custom_1788251275419",
+      "title": "Suspicious Bot Burst Alpha",
+      "merchant_id": "7ddf877f-c61b-409c-86d1-1d1033c3bdc3",
+      "status": "open",
+      "severity": "critical",
+      "risk_score": 0.93,
+      "assigned_to": "Unassigned",
+      "signals": [
+        {
+          "signal_type": "device_collision",
+          "severity": "high",
+          "polarity": "negative",
+          "message": "Tenant A Collision"
+        }
+      ],
+      "typology_tags": [
+        "#SuspiciousVelocity",
+        "#IncidentEscalation"
+      ],
+      "notes": "",
+      "ai_summary": "Case escalated with 93.0% risk score. Review signals below.",
+      "action_checklist": [
+        {
+          "id": "chk_case_custom_1788251275419_1",
+          "title": "Block Device (Hardware Node)",
+          "completed": false,
+          "action_type": "block_device"
+        },
+        {
+          "id": "chk_case_custom_1788251275419_2",
+          "title": "Alert the merchant via webhook",
+          "completed": false,
+          "action_type": "alert_merchant"
+        },
+        {
+          "id": "chk_case_custom_1788251275419_3",
+          "title": "Step-up Authentication (3DS Mandatory)",
+          "completed": false,
+          "action_type": "step_up_auth"
+        },
+        {
+          "id": "chk_case_custom_1788251275419_4",
+          "title": "File Formal Case Resolution",
+          "completed": false,
+          "action_type": "resolve_case"
+        }
+      ],
+      "audit_trail": [
+        {
+          "id": "aud_case_custom_1788251275419_created",
+          "timestamp": "2026-09-01T08:27:55.419Z",
+          "actor": "Analyst",
+          "action": "Case Escalated",
+          "details": "Escalated: \"Suspicious Bot Burst Alpha\" with risk score 93.0%"
+        }
+      ],
+      "mitigations": {
+        "device_blocked": false,
+        "ip_throttled": false,
+        "customer_held": false,
+        "merchant_notified": false
+      },
+      "created_at": "2026-09-01T08:27:55.419Z",
+      "updated_at": "2026-09-01T08:27:55.419Z"
+    },
+    {
       "id": "case_escalated_ring_1",
       "title": "Escalated Test Ring Case",
       "merchant_id": "m_ecommerce_01",
@@ -674,11 +740,46 @@
       ],
       "audit_trail": [
         {
-          "id": "aud_1788121670266_g0z7",
-          "timestamp": "2026-08-30T20:27:50.266Z",
+          "id": "aud_1788323660109_a3vm",
+          "timestamp": "2026-09-02T04:34:20.109Z",
           "actor": "Analyst",
           "action": "Status → Confirmed",
           "details": "Case moved from confirmed to confirmed"
+        },
+        {
+          "id": "aud_1788322994426_asdt",
+          "actor": "Analyst",
+          "action": "Status → Confirmed",
+          "details": "Case moved from confirmed to confirmed",
+          "timestamp": "2026-09-02T04:23:14.426Z"
+        },
+        {
+          "id": "aud_1788322797203_vv4c",
+          "actor": "Analyst",
+          "action": "Status → Confirmed",
+          "details": "Case moved from confirmed to confirmed",
+          "timestamp": "2026-09-02T04:19:57.203Z"
+        },
+        {
+          "id": "aud_1788252803061_np5g",
+          "actor": "Analyst",
+          "action": "Status → Confirmed",
+          "details": "Case moved from confirmed to confirmed",
+          "timestamp": "2026-09-01T08:53:23.061Z"
+        },
+        {
+          "id": "aud_1788251309951_ixez",
+          "actor": "Analyst",
+          "action": "Status → Confirmed",
+          "details": "Case moved from confirmed to confirmed",
+          "timestamp": "2026-09-01T08:28:29.951Z"
+        },
+        {
+          "id": "aud_1788121670266_g0z7",
+          "actor": "Analyst",
+          "action": "Status → Confirmed",
+          "details": "Case moved from confirmed to confirmed",
+          "timestamp": "2026-08-30T20:27:50.266Z"
         },
         {
           "id": "aud_1788121580826_oysm",
@@ -786,7 +887,7 @@
         "merchant_notified": false
       },
       "created_at": "2026-08-30T18:43:50.241Z",
-      "updated_at": "2026-08-30T20:27:50.875Z"
+      "updated_at": "2026-09-02T04:34:20.951Z"
     }
   ]
 }

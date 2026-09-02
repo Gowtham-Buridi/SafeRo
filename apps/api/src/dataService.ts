@@ -287,11 +287,23 @@ class DataStore {
       return baseCase;
     });
 
-    // Merge custom user-created cases
-    const customCaseIds = new Set(this.caseOverrides.customCases.map(c => c.id));
-    const mergedCases = [...this.caseOverrides.customCases];
+    // Merge custom user-created cases (deduplicating by ID and Title)
+    const seenIds = new Set<string>();
+    const seenTitles = new Set<string>();
+    const uniqueCustomCases: RiskCase[] = [];
+
+    for (const c of this.caseOverrides.customCases || []) {
+      const titleKey = `${c.title}_${c.merchant_id || 'default'}`;
+      if (!seenIds.has(c.id) && !seenTitles.has(titleKey)) {
+        seenIds.add(c.id);
+        seenTitles.add(titleKey);
+        uniqueCustomCases.push(c);
+      }
+    }
+
+    const mergedCases = [...uniqueCustomCases];
     for (const sc of synthesizedCases) {
-      if (!customCaseIds.has(sc.id)) {
+      if (!seenIds.has(sc.id)) {
         mergedCases.push(sc);
       }
     }
@@ -311,7 +323,9 @@ class DataStore {
   }
 
   addCase(newCase: RiskCase): RiskCase {
-    const existingIdx = this.cases.findIndex(item => item.id === newCase.id);
+    const existingIdx = this.cases.findIndex(
+      item => item.id === newCase.id || (item.title === newCase.title && item.merchant_id === newCase.merchant_id),
+    );
     if (existingIdx >= 0) {
       this.cases[existingIdx] = { ...this.cases[existingIdx], ...newCase };
     } else {
