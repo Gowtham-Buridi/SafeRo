@@ -61,8 +61,12 @@ See `migrations/001_initial_schema.sql` for the complete schema definition.
 | `model_versions` | ML model version registry |
 | `predictions` | Model prediction log |
 | `investigations` | AI investigation sessions |
+| `webhook_delivery_log` | Persistent log of all incoming webhook delivery attempts & diagnostics |
 
 ## Migrations
 
-Migrations are numbered sequentially: `001_`, `002_`, etc.
-Each migration is a plain SQL file — no ORM dependency.
+Migrations are numbered sequentially: `001_`, `002_`, `003_`, etc.
+Each migration is a plain SQL file — no ORM dependency:
+- `001_initial_schema.sql`: Core relational schema (17 base tables and RLS indexes)
+- `002_add_risk_scoring.sql`: ML model versioning metadata & transaction environment segmentation
+- `003_webhook_delivery_log.sql`: Webhook delivery diagnostics table with merchant-scoped indexes

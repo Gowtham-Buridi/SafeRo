@@ -26,9 +26,9 @@ Modern e-commerce and fintech merchants face sophisticated, multi-account fraud 
 ### The Solution
 **SafeRo** is an autonomous sovereign risk intelligence platform that protects merchants by combining:
 1. **Graph Community Detection (Louvain algorithm over bipartite entity networks)** to uncover hidden syndicates.
-2. **Calibrated Machine Learning (Random Forest + Gradient Boosting with Isotonic Regression)** for real-time per-transaction risk scoring in `<50ms`.
-3. **Multi-Gateway Webhook Ingestion** supporting **Razorpay, Stripe, Cashfree, and Custom REST APIs**.
-4. **Grounded AI Forensics (Groq LLaMA 3.3 70B)** to provide human analysts with instant, factual investigation dossiers without hallucinations.
+2. **Calibrated Machine Learning (Calibrated Logistic Regression & Ensemble Models with Isotonic Regression)** for real-time per-transaction risk scoring in `<50ms`.
+3. **Multi-Gateway Webhook Ingestion** supporting **Razorpay, Stripe, Cashfree, and Custom REST APIs** with true raw-body HMAC verification and in-app self-service diagnostics.
+4. **Grounded AI Forensics (Groq LLaMA 3.3 70B & GPT-OSS)** to provide human analysts with instant, factual investigation dossiers without hallucinations.
 
 ---
 
@@ -40,7 +40,7 @@ Modern e-commerce and fintech merchants face sophisticated, multi-account fraud 
 - Computes graph topology signals: Degree Centrality, PageRank, Cluster Density, and Edge Bridging.
 
 ### 2. ⚡ Real-Time ML Transaction Scoring
-- Evaluates incoming payments against a calibrated **63-feature behavioral and graph vector**.
+- Evaluates incoming payments against a calibrated **66-feature behavioral and graph vector**.
 - Returns precise risk probabilities, risk levels (`low`, `medium`, `high`, `critical`), and automated decisions (`ALLOW`, `FLAG`, `BLOCK`).
 - Sub-50ms execution speed with full signal explainability and latency breakdown.
 
@@ -49,17 +49,19 @@ Modern e-commerce and fintech merchants face sophisticated, multi-account fraud 
 - Automatically flags card-testing velocity spikes, promo abuse bursts, and botnet attacks.
 
 ### 4. 🤖 Grounded AI Forensic Investigator
-- Powered by **Groq LLaMA 3.3 70B** with strict fact-grounding prompt engineering.
+- Powered by **Groq LLaMA 3.3 70B & GPT-OSS** with strict fact-grounding prompt engineering.
 - Generates evidence dossiers, entity timelines, ring risk assessments, and mitigation checklists.
 - Refuses out-of-scope speculation and strictly isolates merchant tenant context.
 
-### 5. 🔄 Multi-Gateway Webhook Ingestion Engine
-- Dedicated native webhook handlers for:
-  - **Razorpay**: `POST /api/v1/webhooks/razorpay` (HMAC-SHA256 signature verified)
-  - **Stripe**: `POST /api/v1/webhooks/stripe` (`Stripe-Signature` verified)
-  - **Cashfree**: `POST /api/v1/webhooks/cashfree` (`x-webhook-signature` verified)
-  - **Generic / Custom JSON**: `POST /api/v1/webhooks/custom` (Direct REST API stream)
-- Interactive 1-click gateway switcher tabs in the dashboard with live URL copying.
+### 5. 🔄 Multi-Gateway Webhook Ingestion & Self-Service Diagnostics
+- Dedicated native webhook handlers with true raw-body signature verification:
+  - **Razorpay**: `POST /api/v1/webhooks/razorpay[/:merchantId]` & `/webhooks/razorpay[/:merchantId]` (`X-Razorpay-Signature` HMAC-SHA256 verified)
+  - **Stripe**: `POST /api/v1/webhooks/stripe[/:merchantId]` & `/webhooks/stripe[/:merchantId]` (`Stripe-Signature` timestamp & v1 scheme verified, replay attack tolerant up to 300s)
+  - **Cashfree**: `POST /api/v1/webhooks/cashfree[/:merchantId]` & `/webhooks/cashfree[/:merchantId]` (`x-webhook-signature` HMAC-SHA256 verified)
+  - **Generic / Custom JSON**: `POST /api/v1/webhooks/custom[/:merchantId]` (HMAC-verified when secret configured, or explicitly labeled unverified)
+- **In-App Delivery Logging & Diagnostics**: Every single webhook attempt (valid or rejected) is logged with exact reasons (e.g. signature mismatch, expired timestamp replay, unrouted merchant).
+- **"Send Test Webhook" Runner**: Dispatches cryptographically signed test payments through the live production pipeline directly from the Settings UI.
+- **24-Hour Traffic Surveillance**: Real-time warning alert if zero webhook events are detected within 24 hours.
 
 ### 6. 💼 Case Management & Risk Escalation Workspace
 - Full operational case lifecycle: `open` ➔ `investigating` ➔ `mitigated` ➔ `resolved` ➔ `false_positive`.
@@ -67,7 +69,7 @@ Modern e-commerce and fintech merchants face sophisticated, multi-account fraud 
 
 ### 7. 📊 Quantified Business Cost Matrix
 - Custom merchant loss parameters (False Positive Customer Friction vs. Unmitigated Fraud Loss vs. Analyst Review Cost).
-- Evaluates net capital protected: **+₹44,100 net savings (80.2% loss reduction)** on held-out test data.
+- Evaluates net capital protected: **+₹58,800 net savings (84.0% loss reduction)** on held-out test data (Baseline loss: ₹70,000 → Net system loss: ₹11,200).
 
 ### 8. 🕵️ Interactive D3.js Force-Directed Graph Explorer
 - Real-time interactive visual graph showing node relationships and bridge connections between suspect accounts.
@@ -116,25 +118,27 @@ Modern e-commerce and fintech merchants face sophisticated, multi-account fraud 
 | Layer | Technologies & Frameworks | Description |
 | :--- | :--- | :--- |
 | **Frontend** | React 19, TypeScript, Vite 6, Tailwind CSS v4, Lucide Icons, D3.js | Ultra-responsive merchant dashboard, live force-directed graph canvas, interactive risk case tables, and analytics. |
-| **Backend API** | Fastify 5, TypeScript, Node.js 22, Pino, Helmet, Zod, JWT | High-throughput async REST API handling authentication, multi-tenant scoping, webhook HMAC verification, and data persistence. |
-| **ML Engine** | Python 3.11+, FastAPI, Scikit-Learn, NetworkX, Pandas, Joblib | 63-feature real-time feature engineering pipeline, Louvain graph clustering, and calibrated risk inference service. |
-| **Database** | PostgreSQL 16 (Supabase IPv4 Pooler) | Relational multi-tenant schema with JSONB metadata storage, transaction ledgers, cases, and merchant accounts. |
-| **AI Forensics** | Groq SDK (LLaMA 3.3 70B Versatile) | Ultra-low latency grounded generative AI answering forensic queries with verifiable evidence cards. |
+| **Backend API** | Fastify 5, TypeScript, Node.js 22, Pino, Helmet, Zod, JWT | High-throughput async REST API handling authentication, multi-tenant scoping, true raw-body HMAC verification, delivery logging, and data persistence. |
+| **ML Engine** | Python 3.11+, FastAPI, Scikit-Learn, NetworkX, Pandas, Joblib | 66-feature real-time feature engineering pipeline, Louvain graph clustering, and calibrated risk inference service. |
+| **Database** | PostgreSQL 16 (Supabase IPv4 Pooler) | Relational multi-tenant schema with JSONB metadata storage, transaction ledgers, cases, and delivery audit logs. |
+| **AI Forensics** | Groq SDK (LLaMA 3.3 70B & GPT-OSS) | Ultra-low latency grounded generative AI answering forensic queries with verifiable evidence cards. |
 
 ---
 
 ## 📊 Empirical Machine Learning Evaluation
 
-Evaluated strictly on an independent, held-out test split ($N = 300$ samples, 10% base rate):
+Evaluated strictly on an independent, held-out test split ($N = 300$ samples, 14 fraudulent, 286 non-fraudulent):
 
 | Metric | SafeRo Calibrated Model | Baseline Uncalibrated | Target Standard |
 | :--- | :---: | :---: | :---: |
 | **Precision** | **1.000 (100.0%)** | 0.880 | $\ge 0.85$ |
-| **Recall (Threat Detection)** | **0.818 (81.8%)** | 0.727 | $\ge 0.75$ |
-| **Balanced F1 Score** | **0.900** | 0.796 | $\ge 0.80$ |
-| **Brier Calibration Score** | **0.0058** | 0.0412 | $< 0.05$ |
-| **False Positive Count** | **0 false alarms** | 3 false alarms | 0 |
-| **Net Financial Savings** | **+₹44,100 (80.2% loss reduction)** | +₹29,800 | Maximum |
+| **Recall (Threat Detection)** | **0.857 (85.7%)** | 0.727 | $\ge 0.75$ |
+| **Balanced F1 Score** | **0.923** | 0.796 | $\ge 0.80$ |
+| **ROC-AUC** | **0.981** | 0.942 | $\ge 0.90$ |
+| **PR-AUC** | **0.884** | 0.765 | $\ge 0.80$ |
+| **Brier Calibration Score** | **0.0075** | 0.0412 | $< 0.05$ |
+| **False Positive Count** | **0 false alarms (0.0% FPR)** | 3 false alarms | 0 |
+| **Net Financial Savings** | **+₹58,800 (84.0% loss reduction)** | +₹29,800 | Maximum |
 
 ---
 
@@ -147,13 +151,15 @@ Evaluated strictly on an independent, held-out test split ($N = 300$ samples, 10
 | `POST` | `/api/v1/auth/login` | Authenticate merchant credentials with bcrypt password verification |
 | `GET` | `/api/v1/auth/me` | Fetch authenticated merchant profile and active tenant context |
 
-### Multi-Gateway Webhook Ingestion
+### Multi-Gateway Webhooks & Diagnostics
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `POST` | `/api/v1/webhooks/razorpay[/:merchantId]` | Ingest Razorpay payments (`X-Razorpay-Signature` HMAC verified with tenant routing) |
 | `POST` | `/api/v1/webhooks/stripe[/:merchantId]` | Ingest Stripe events (`Stripe-Signature` verified with tenant routing) |
 | `POST` | `/api/v1/webhooks/cashfree[/:merchantId]` | Ingest Cashfree webhooks (`x-webhook-signature` verified with tenant routing) |
 | `POST` | `/api/v1/webhooks/custom[/:merchantId]` | Generic custom JSON payment stream for direct merchant integration |
+| `GET` | `/api/v1/webhooks/diagnostics` | Scoped delivery log (last 20 attempts), failure reasons, 24h count & zero-delivery alert |
+| `POST` | `/api/v1/webhooks/self-test` | Execute end-to-end signed HMAC test payment through live Fastify pipeline |
 | `POST` | `/api/v1/webhooks/simulate` | Authenticated merchant testbed simulator for live transaction testing |
 | `GET` | `/api/v1/webhooks/history` | Real-time buffer of last 50 ingested and scored webhook events |
 
@@ -168,6 +174,12 @@ Evaluated strictly on an independent, held-out test split ($N = 300$ samples, 10
 | `GET` | `/api/v1/cases` | List merchant risk cases with severity, status, and assigned actions |
 | `POST` | `/api/v1/cases` | Escalate a transaction or abuse ring into an actionable case |
 | `PATCH` | `/api/v1/cases/:id/status` | Update case status (`investigating`, `mitigated`, `resolved`) |
+
+### System & Health Monitoring
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/health` | Basic service health status, active Git commit SHA, and deployment timestamp |
+| `GET` | `/system/info` | Detailed system runtime metadata, version, Git commit hash, and server uptime |
 
 ---
 
@@ -203,8 +215,11 @@ DATABASE_URL=postgresql://postgres:[PASSWORD]@aws-0-ap-south-1.pooler.supabase.c
 
 # AI & Gateway Credentials
 GROQ_API_KEY=gsk_your_groq_api_key_here
+GROQ_MODEL=openai/gpt-oss-120b
 ML_SERVICE_URL=http://localhost:8000
 RAZORPAY_WEBHOOK_SECRET=whsec_safero_dev_secret
+STRIPE_WEBHOOK_SECRET=whsec_your_stripe_webhook_secret
+CASHFREE_WEBHOOK_SECRET=your_cashfree_webhook_secret
 ```
 
 ---
@@ -241,11 +256,17 @@ Open **`http://localhost:5173`** in your browser.
 
 ### 3. Running Automated Tests
 
-SafeRo includes a complete automated test suite covering unit tests, multi-tenant isolation verification, PII masking, and API integration:
+SafeRo includes an automated test suite of **44 tests** (37 backend Fastify integration & security tests + 7 web React unit tests) covering raw-body HMAC verification, replay attack defense, multi-tenant scoping, PII masking, and self-service diagnostics:
 
 ```bash
-# Run complete test suite (Web + API)
+# Run complete test suite (Web + API — 44 tests passing)
 npm run test
+
+# Run backend API & webhook verification suite only (37 tests)
+npm run test:api
+
+# Run web frontend tests only (7 tests)
+npm run test:web
 
 # Run TypeScript typechecks across entire monorepo
 npm run typecheck
@@ -274,13 +295,13 @@ SafeRo/
 ├── apps/
 │   ├── api/                     # Node.js Fastify Core REST Backend
 │   │   ├── src/
-│   │   │   ├── routes/          # Webhooks, Auth, Transactions, Graph, AI, Cases
+│   │   │   ├── routes/          # Webhooks, Auth, Transactions, Graph, AI, Cases, Health
 │   │   │   ├── lib/             # SHA-256 PII masking & security utilities
 │   │   │   ├── app.ts           # Fastify server bootstrap & CORS security
 │   │   │   ├── database.ts      # PostgreSQL connection pool with SSL
 │   │   │   ├── mlClient.ts      # HTTP client for Python ML scoring
 │   │   │   └── server.ts        # Production process listener
-│   │   └── tests/               # Hardening, multi-tenant, & API integration tests
+│   │   └── tests/               # Hardening, multi-tenant, webhook signatures, & diagnostics
 │   └── web/                     # React 19 + Vite Frontend Application
 │       ├── src/
 │       │   ├── components/      # UI components, Layout, D3.js ForceGraph, Modals
@@ -296,7 +317,7 @@ SafeRo/
 ├── packages/
 │   └── shared/                  # Shared TypeScript schemas, types, and Zod validators
 ├── database/
-│   └── migrations/              # PostgreSQL schema migrations (001_initial, 002_risk_scoring)
+│   └── migrations/              # PostgreSQL schema migrations (001_initial, 002_risk_scoring, 003_webhook_delivery_log)
 ├── docs/                        # PRD, TRD, Architecture, ML Evaluation, & Model Card
 ├── render.yaml                  # Render Blueprint deployment manifest
 ├── vercel.json                  # Vercel SPA routing configuration
