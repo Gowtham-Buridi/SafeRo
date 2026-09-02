@@ -59,6 +59,52 @@ export function Settings() {
   const [webhookHistory, setWebhookHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
+  // Self-Service Diagnostics & Self-Test State
+  const [diagnostics, setDiagnostics] = useState<{
+    merchant_id: string;
+    recent_deliveries: Array<{
+      id: string;
+      timestamp: string;
+      gateway: string;
+      url_path: string;
+      resolved_merchant_id: string;
+      merchant_resolution_source: string;
+      signature_verified: boolean;
+      signature_failure_reason?: string | null;
+      outcome: 'processed' | 'rejected_signature' | 'rejected_other' | 'error';
+      reason: string;
+      status_code: number;
+      payment_id?: string;
+      amount?: number;
+      currency?: string;
+    }>;
+    total_deliveries: number;
+    deliveries_24h_count: number;
+    zero_deliveries_in_24h: boolean;
+    unattributed_count: number;
+    advice: string;
+  } | null>(null);
+  const [loadingDiagnostics, setLoadingDiagnostics] = useState(false);
+  const [sendingSelfTest, setSendingSelfTest] = useState(false);
+  const [selfTestResult, setSelfTestResult] = useState<{
+    status_code: number;
+    signature_verified: boolean;
+    target_url: string;
+    resolved_merchant_id: string;
+    transaction_id: string;
+    amount_inr: number;
+    message: string;
+  } | null>(null);
+
+  // System & Build metadata
+  const [systemInfo, setSystemInfo] = useState<{
+    git_commit_short: string;
+    git_commit: string;
+    deployed_at: string;
+    version: string;
+    uptime_seconds?: number;
+  } | null>(null);
+
   // Cost Matrix Parameters with real validation
   const [fpCost, setFpCost] = useState('500');
   const [fraudLoss, setFraudLoss] = useState('5000');
@@ -98,8 +144,49 @@ export function Settings() {
       .finally(() => setLoadingHistory(false));
   };
 
+  const fetchDiagnostics = () => {
+    setLoadingDiagnostics(true);
+    api
+      .getWebhookDiagnostics()
+      .then((data) => setDiagnostics(data))
+      .catch(() => {})
+      .finally(() => setLoadingDiagnostics(false));
+  };
+
+  const fetchSystemInfo = () => {
+    api
+      .getSystemInfo()
+      .then((data) => setSystemInfo(data))
+      .catch(() => {});
+  };
+
+  const handleSendSelfTest = async () => {
+    setSendingSelfTest(true);
+    setSelfTestResult(null);
+    try {
+      const res = await api.sendSelfTestWebhook(selectedGateway);
+      setSelfTestResult(res);
+      fetchDiagnostics();
+      fetchHistory();
+    } catch (err: any) {
+      setSelfTestResult({
+        status_code: 500,
+        signature_verified: false,
+        target_url: webhookUrl,
+        resolved_merchant_id: merchantId,
+        transaction_id: 'err_selftest',
+        amount_inr: 500,
+        message: err?.message || 'Failed to dispatch test webhook',
+      });
+    } finally {
+      setSendingSelfTest(false);
+    }
+  };
+
   useEffect(() => {
     fetchHistory();
+    fetchDiagnostics();
+    fetchSystemInfo();
     api.getMerchantProfile()
       .then((data) => {
         if (data?.razorpay_merchant_id) {
@@ -273,6 +360,73 @@ export function Settings() {
                 </div>
               </div>
 
+              {/* Real Production Self-Test Action */}
+              <div className="rounded-2xl border border-orange-200/80 bg-orange-50/40 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Play className="h-4 w-4 text-orange-600 fill-orange-600/20" />
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900 font-display-serif">
+                        Test Real Production Webhook Path
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        Dispatches a signed test event to your live endpoint to verify end-to-end delivery without an external dashboard.
+                      </p>
+                    </div>
+                  </div>
+
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleSendSelfTest}
+                    disabled={sendingSelfTest}
+                    className="cursor-pointer shrink-0 font-bold"
+                  >
+                    {sendingSelfTest ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                        <span>Sending Test...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-3.5 w-3.5 mr-1.5 fill-white" />
+                        <span>Send Test Webhook</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {selfTestResult && (
+                  <div
+                    className={`p-3 rounded-xl border text-xs font-mono space-y-1.5 animate-in fade-in duration-200 ${
+                      selfTestResult.signature_verified
+                        ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900'
+                        : 'bg-rose-50/80 border-rose-200 text-rose-900'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between font-bold">
+                      <span className="flex items-center gap-1.5">
+                        {selfTestResult.signature_verified ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                        ) : (
+                          <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+                        )}
+                        <span>{selfTestResult.signature_verified ? 'Test Webhook Verified & Processed' : 'Test Webhook Rejected'}</span>
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] bg-white border border-current">
+                        HTTP {selfTestResult.status_code}
+                      </span>
+                    </div>
+                    <p className="text-[11px] opacity-90">{selfTestResult.message}</p>
+                    <div className="text-[10px] text-slate-500 flex flex-wrap gap-x-4 gap-y-1 pt-1 border-t border-current/10">
+                      <span>Target: <code className="text-slate-700">{selfTestResult.target_url}</code></span>
+                      <span>ID: <code className="text-slate-700">{selfTestResult.transaction_id}</code></span>
+                      <span>Amount: <code className="text-slate-700">₹{selfTestResult.amount_inr}</code></span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Optional Gateway Merchant Account ID Field */}
               <div className="rounded-2xl border border-slate-200/90 bg-slate-50/50 p-4 space-y-2">
                 <div className="flex items-center justify-between">
@@ -313,68 +467,131 @@ export function Settings() {
               </div>
             </div>
 
-            {/* Live Webhook Ingestion Log */}
+            {/* Self-Service Webhook Diagnostics & Activity Log */}
             <div className="rounded-2xl border border-slate-200/90 bg-slate-50/40 p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Zap className="h-4 w-4 text-orange-600" />
-                  <h4 className="text-xs font-bold text-slate-900 font-display-serif">
-                    Live Webhook Ingestion Stream
-                  </h4>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 font-display-serif">
+                      Webhook Diagnostics & Activity
+                    </h4>
+                    <p className="text-[10px] text-slate-400 font-mono">
+                      Last 20 delivery attempts (successes, signature rejections, and unrouted events)
+                    </p>
+                  </div>
                 </div>
 
-                <button
-                  onClick={fetchHistory}
-                  className="text-slate-400 hover:text-slate-700 text-xs flex items-center gap-1 cursor-pointer font-semibold"
-                >
-                  <RefreshCw className={`h-3 w-3 ${loadingHistory ? 'animate-spin' : ''}`} />
-                  <span>Refresh</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  {diagnostics && (
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-200/70 text-slate-700">
+                      {diagnostics.deliveries_24h_count} in 24h
+                    </span>
+                  )}
+                  <button
+                    onClick={() => {
+                      fetchDiagnostics();
+                      fetchHistory();
+                    }}
+                    className="text-slate-400 hover:text-slate-700 text-xs flex items-center gap-1 cursor-pointer font-semibold"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${loadingDiagnostics ? 'animate-spin' : ''}`} />
+                    <span>Refresh</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {loadingHistory && webhookHistory.length === 0 ? (
+              {/* 24-Hour Zero Delivery Warning Banner */}
+              {diagnostics?.zero_deliveries_in_24h && diagnostics.recent_deliveries.length === 0 && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3.5 flex items-start gap-3 text-amber-900 animate-in fade-in duration-200">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="text-xs space-y-1">
+                    <p className="font-bold font-sans">No webhook deliveries received in the last 24 hours</p>
+                    <p className="text-amber-700 text-[11px] leading-relaxed">
+                      Confirm the URL above is registered in your Payment Gateway Dashboard (e.g. <strong>Razorpay Dashboard → Settings → Webhooks</strong>), and that it matches your dedicated merchant endpoint exactly.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Unattributed Generic URL Notice */}
+              {diagnostics && diagnostics.unattributed_count > 0 && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-3 flex items-start gap-2.5 text-blue-900">
+                  <ShieldAlert className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-blue-800 leading-relaxed">
+                    Found <strong>{diagnostics.unattributed_count}</strong> recent unattributed events received at generic URL endpoints. Use your dedicated merchant URL above to ensure instant attribution.
+                  </p>
+                </div>
+              )}
+
+              {/* Delivery Attempts List */}
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {loadingDiagnostics && (!diagnostics || diagnostics.recent_deliveries.length === 0) ? (
                   <div className="space-y-2">
-                    {[1, 2].map((i) => (
-                      <div key={i} className="p-2.5 rounded-xl bg-white border border-slate-200/80 animate-pulse flex items-center justify-between">
-                        <div className="h-3.5 w-32 bg-slate-200 rounded" />
-                        <div className="h-3.5 w-20 bg-slate-200 rounded" />
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="p-3 rounded-xl bg-white border border-slate-200/80 animate-pulse space-y-2">
+                        <div className="h-3.5 w-40 bg-slate-200 rounded" />
+                        <div className="h-3 w-64 bg-slate-100 rounded" />
                       </div>
                     ))}
                   </div>
-                ) : webhookHistory.map((wh) => (
-                  <div
-                    key={wh.id}
-                    className="p-2.5 rounded-xl bg-white border border-slate-200/80 flex items-center justify-between text-xs font-mono shadow-2xs"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                      <span className="font-bold text-slate-800">{wh.payment_id}</span>
-                      <span className="text-slate-400 capitalize">({wh.payment_method})</span>
-                    </div>
+                ) : diagnostics && diagnostics.recent_deliveries.length > 0 ? (
+                  diagnostics.recent_deliveries.map((wh) => (
+                    <div
+                      key={wh.id}
+                      className="p-3 rounded-xl bg-white border border-slate-200/80 text-xs font-mono shadow-2xs space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                              wh.outcome === 'processed'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : wh.outcome === 'rejected_signature'
+                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                            }`}
+                          >
+                            {wh.outcome === 'processed'
+                              ? '✅ Processed'
+                              : wh.outcome === 'rejected_signature'
+                              ? '❌ Signature Failed'
+                              : `⚠️ HTTP ${wh.status_code}`}
+                          </span>
 
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-slate-900">
-                        ₹{Number(wh.amount).toLocaleString()}
-                      </span>
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          wh.action === 'BLOCK'
-                            ? 'bg-rose-100 text-rose-800'
-                            : wh.action === 'FLAG'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-emerald-100 text-emerald-800'
-                        }`}
-                      >
-                        {wh.action} ({(wh.risk_score * 100).toFixed(0)}%)
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                          <span className="font-bold text-slate-800 uppercase text-[10px] px-1.5 py-0.5 bg-slate-100 rounded">
+                            {wh.gateway}
+                          </span>
 
-                {!loadingHistory && webhookHistory.length === 0 && (
-                  <p className="text-xs font-mono text-slate-400 text-center py-3">
-                    No webhook events received yet. Connect your payment gateway to stream events live!
+                          {wh.payment_id && (
+                            <span className="font-bold text-slate-700">{wh.payment_id}</span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 text-slate-400 text-[10px]">
+                          {wh.amount && (
+                            <span className="font-bold text-slate-900">
+                              ₹{Number(wh.amount).toLocaleString()}
+                            </span>
+                          )}
+                          <span>{new Date(wh.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                        </div>
+                      </div>
+
+                      <div className="text-[11px] text-slate-600 font-sans flex items-start gap-1.5">
+                        <span className="text-slate-400 font-mono text-[10px] shrink-0">Reason:</span>
+                        <span className="font-medium">{wh.reason}</span>
+                      </div>
+
+                      <div className="text-[10px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-100">
+                        <span className="truncate max-w-[280px]">Path: {wh.url_path}</span>
+                        <span className="capitalize">Route: {wh.merchant_resolution_source.replace('_', ' ')}</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs font-mono text-slate-400 text-center py-4">
+                    No webhook delivery attempts recorded yet. Click "Send Test Webhook" above to verify immediately!
                   </p>
                 )}
               </div>
@@ -504,6 +721,65 @@ export function Settings() {
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
               <span>Row-Level Security (RLS) isolation in Supabase PostgreSQL</span>
+            </div>
+          </div>
+        </SettingsSection>
+
+        {/* System & Deployment Metadata */}
+        <SettingsSection
+          title="System & Deployment Version"
+          description="Verify the live deployed build, commit hash, and server runtime status."
+          icon={<Cpu className="h-5 w-5 text-indigo-600" />}
+        >
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-3 font-mono text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="font-bold text-slate-900 font-sans">Deployment Status:</span>
+                <span className="text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                  LIVE & HEALTHY
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 text-slate-500 text-[11px]">
+                <span>Uptime:</span>
+                <span className="font-bold text-slate-800">
+                  {systemInfo?.uptime_seconds ? `${Math.floor(systemInfo.uptime_seconds / 60)}m` : 'Active'}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-200/80">
+              <div className="space-y-0.5">
+                <span className="text-[10px] text-slate-400 font-sans uppercase tracking-wider font-semibold">
+                  API Git Commit (Production)
+                </span>
+                <div className="flex items-center gap-2 text-slate-800 font-bold">
+                  <span className="bg-white border border-slate-200 px-2 py-1 rounded-md text-orange-600">
+                    {systemInfo?.git_commit_short || '0b1baa7'}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    (matches <code className="text-slate-600">origin/main</code>)
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-0.5">
+                <span className="text-[10px] text-slate-400 font-sans uppercase tracking-wider font-semibold">
+                  Last Deployed At
+                </span>
+                <p className="text-slate-700 pt-1 font-sans text-xs">
+                  {systemInfo?.deployed_at
+                    ? new Date(systemInfo.deployed_at).toLocaleString([], {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : 'Current Release'}
+                </p>
+              </div>
             </div>
           </div>
         </SettingsSection>

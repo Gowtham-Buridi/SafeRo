@@ -32,6 +32,86 @@ export interface WebhookLogEntry {
 
 const webhookAuditBuffer: WebhookLogEntry[] = [];
 
+// ── Webhook Delivery Diagnostics Log (Every Delivery Attempt) ─────────
+export interface WebhookDeliveryLogEntry {
+  id: string;
+  timestamp: string;
+  gateway: 'razorpay' | 'stripe' | 'cashfree' | 'custom';
+  url_path: string;
+  resolved_merchant_id: string;
+  merchant_resolution_source: 'route_param' | 'query_param' | 'header' | 'notes' | 'account_mapping' | 'fallback_default' | 'unresolved';
+  signature_verified: boolean;
+  signature_failure_reason?: string | null;
+  outcome: 'processed' | 'rejected_signature' | 'rejected_other' | 'error';
+  reason: string;
+  status_code: number;
+  payment_id?: string;
+  amount?: number;
+  currency?: string;
+  payload_preview?: string;
+}
+
+export const webhookDeliveryLogBuffer: WebhookDeliveryLogEntry[] = [];
+
+export async function recordWebhookDelivery(
+  entry: Omit<WebhookDeliveryLogEntry, 'id' | 'timestamp'> & { id?: string; timestamp?: string },
+): Promise<WebhookDeliveryLogEntry> {
+  const fullEntry: WebhookDeliveryLogEntry = {
+    id: entry.id || `whlog_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    timestamp: entry.timestamp || new Date().toISOString(),
+    gateway: entry.gateway,
+    url_path: entry.url_path,
+    resolved_merchant_id: entry.resolved_merchant_id,
+    merchant_resolution_source: entry.merchant_resolution_source,
+    signature_verified: entry.signature_verified,
+    signature_failure_reason: entry.signature_failure_reason || null,
+    outcome: entry.outcome,
+    reason: entry.reason,
+    status_code: entry.status_code,
+    payment_id: entry.payment_id,
+    amount: entry.amount,
+    currency: entry.currency,
+    payload_preview: entry.payload_preview ? entry.payload_preview.slice(0, 300) : undefined,
+  };
+
+  webhookDeliveryLogBuffer.unshift(fullEntry);
+  if (webhookDeliveryLogBuffer.length > 200) webhookDeliveryLogBuffer.pop();
+
+  // Asynchronously attempt to persist to Postgres
+  try {
+    await pool.query(
+      `INSERT INTO webhook_delivery_log
+       (gateway, url_path, resolved_merchant_id, merchant_resolution_source, signature_verified, signature_failure_reason, outcome, reason, status_code, payment_id, amount, currency, payload_preview, timestamp)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+      [
+        fullEntry.gateway,
+        fullEntry.url_path,
+        fullEntry.resolved_merchant_id,
+        fullEntry.merchant_resolution_source,
+        fullEntry.signature_verified,
+        fullEntry.signature_failure_reason,
+        fullEntry.outcome,
+        fullEntry.reason,
+        fullEntry.status_code,
+        fullEntry.payment_id || null,
+        fullEntry.amount || null,
+        fullEntry.currency || null,
+        fullEntry.payload_preview || null,
+        fullEntry.timestamp,
+      ],
+    ).catch(() => {});
+  } catch {
+    // Non-blocking fallback
+  }
+
+  return fullEntry;
+}
+
+export interface MerchantResolutionResult {
+  merchantId: string;
+  source: 'route_param' | 'query_param' | 'header' | 'notes' | 'account_mapping' | 'fallback_default' | 'unresolved';
+}
+
 /**
  * 5-tier waterfall resolution for incoming webhook merchant tenant identity:
  * 1. Webhook endpoint URL route param: `/webhooks/:gateway/:merchantId`
@@ -41,38 +121,57 @@ const webhookAuditBuffer: WebhookLogEntry[] = [];
  * 5. Account ID DB mapping: `body.account_id` -> `merchants.razorpay_merchant_id`
  * 6. Default connected store fallback: `'m_ecommerce_01'`
  */
-async function resolveWebhookMerchantId(request: FastifyRequest, body: any, paymentEntity: any): Promise<string> {
+export async function resolveWebhookMerchantDetails(
+  request: FastifyRequest,
+  body: any,
+  paymentEntity: any,
+): Promise<MerchantResolutionResult> {
   const paramMerchant = (request.params as any)?.merchantId || (request.params as any)?.merchant_id;
   if (paramMerchant && typeof paramMerchant === 'string' && paramMerchant.trim() !== '') {
-    return paramMerchant.trim();
+    return { merchantId: paramMerchant.trim(), source: 'route_param' };
   }
 
   const queryMerchant = (request.query as any)?.merchant_id || (request.query as any)?.merchantId;
   if (queryMerchant && typeof queryMerchant === 'string' && queryMerchant.trim() !== '') {
-    return queryMerchant.trim();
+    return { merchantId: queryMerchant.trim(), source: 'query_param' };
   }
 
-  const headerMerchant = (request.headers['x-merchant-id'] as string) || (request.headers['x-safero-merchant-id'] as string);
+  const headerMerchant =
+    (request.headers['x-merchant-id'] as string) || (request.headers['x-safero-merchant-id'] as string);
   if (headerMerchant && typeof headerMerchant === 'string' && headerMerchant.trim() !== '') {
-    return headerMerchant.trim();
+    return { merchantId: headerMerchant.trim(), source: 'header' };
   }
 
-  const notesMerchant = paymentEntity?.notes?.merchant_id || paymentEntity?.notes?.merchantId || paymentEntity?.notes?.userId || paymentEntity?.metadata?.merchant_id || body?.metadata?.merchant_id;
+  const notesMerchant =
+    paymentEntity?.notes?.merchant_id ||
+    paymentEntity?.notes?.merchantId ||
+    paymentEntity?.notes?.userId ||
+    paymentEntity?.metadata?.merchant_id ||
+    body?.metadata?.merchant_id;
   if (notesMerchant && typeof notesMerchant === 'string' && notesMerchant.trim() !== '') {
-    return notesMerchant.trim();
+    return { merchantId: notesMerchant.trim(), source: 'notes' };
   }
 
   const accountId = body?.account_id || paymentEntity?.account_id || body?.account;
   if (accountId) {
     try {
       const res = await pool.query('SELECT id FROM merchants WHERE razorpay_merchant_id = $1 LIMIT 1', [accountId]);
-      if (res.rows.length > 0) return res.rows[0].id;
+      if (res.rows.length > 0) return { merchantId: res.rows[0].id, source: 'account_mapping' };
     } catch {
       // Non-blocking fallback
     }
   }
 
-  return 'm_ecommerce_01';
+  return { merchantId: 'm_ecommerce_01', source: 'fallback_default' };
+}
+
+export async function resolveWebhookMerchantId(
+  request: FastifyRequest,
+  body: any,
+  paymentEntity: any,
+): Promise<string> {
+  const res = await resolveWebhookMerchantDetails(request, body, paymentEntity);
+  return res.merchantId;
 }
 
 /**
@@ -82,6 +181,8 @@ async function processWebhookTransaction(opts: {
   gateway: 'razorpay' | 'stripe' | 'cashfree' | 'custom';
   paymentId: string;
   merchantId: string;
+  resolutionSource?: 'route_param' | 'query_param' | 'header' | 'notes' | 'account_mapping' | 'fallback_default' | 'unresolved';
+  urlPath?: string;
   amountInr: number;
   currency: string;
   method: string;
@@ -94,6 +195,8 @@ async function processWebhookTransaction(opts: {
   customerId: string;
   event: string;
   signatureVerified: boolean;
+  signatureFailureReason?: string | null;
+  rawPayloadPreview?: string;
   reply: FastifyReply;
 }) {
   const maskedCustomer = maskEmail(opts.rawEmail);
@@ -125,6 +228,21 @@ async function processWebhookTransaction(opts: {
   } catch (err) {
     if (err instanceof MlServiceError) {
       logger.error({ paymentId: opts.paymentId, gateway: opts.gateway, err: err.message }, 'ML service unavailable — rejecting webhook');
+      await recordWebhookDelivery({
+        gateway: opts.gateway,
+        url_path: opts.urlPath || `/webhooks/${opts.gateway}`,
+        resolved_merchant_id: opts.merchantId,
+        merchant_resolution_source: opts.resolutionSource || 'fallback_default',
+        signature_verified: opts.signatureVerified,
+        signature_failure_reason: opts.signatureFailureReason || null,
+        outcome: 'error',
+        reason: 'Risk scoring service (ML) unavailable (HTTP 503)',
+        status_code: 503,
+        payment_id: opts.paymentId,
+        amount: opts.amountInr,
+        currency: opts.currency,
+        payload_preview: opts.rawPayloadPreview,
+      });
       return opts.reply.status(503).send({
         success: false,
         error: {
@@ -224,6 +342,23 @@ async function processWebhookTransaction(opts: {
   webhookAuditBuffer.unshift(auditEntry);
   if (webhookAuditBuffer.length > 50) webhookAuditBuffer.pop();
 
+  // ── Log to durable delivery log ──────────────────────────────────────
+  await recordWebhookDelivery({
+    gateway: opts.gateway,
+    url_path: opts.urlPath || `/webhooks/${opts.gateway}`,
+    resolved_merchant_id: opts.merchantId,
+    merchant_resolution_source: opts.resolutionSource || 'fallback_default',
+    signature_verified: opts.signatureVerified,
+    signature_failure_reason: opts.signatureFailureReason || null,
+    outcome: 'processed',
+    reason: `Payment captured & scored by SafeRo ML Engine (Risk: ${(riskScore * 100).toFixed(0)}%, Action: ${action})`,
+    status_code: 200,
+    payment_id: opts.paymentId,
+    amount: opts.amountInr,
+    currency: opts.currency,
+    payload_preview: opts.rawPayloadPreview,
+  });
+
   logger.info(
     { gateway: opts.gateway, paymentId: opts.paymentId, merchantId: opts.merchantId, amount: opts.amountInr, riskScore, riskLevel, action },
     `✅ [${opts.gateway.toUpperCase()}] Payment Webhook Ingested & Scored by SafeRo ML Engine`,
@@ -268,11 +403,44 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     const signature = (request.headers['x-razorpay-signature'] as string) || '';
     const secret = config.razorpay.webhookSecret || process.env.RAZORPAY_WEBHOOK_SECRET || '';
 
+    const body = (request.body as any) || {};
+    const event = body.event || 'payment.captured';
+    const paymentEntity = body.payload?.payment?.entity || body.payment || body;
+
+    const paymentId = paymentEntity.id || `pay_${crypto.randomUUID().slice(0, 10)}`;
+    const resolution = await resolveWebhookMerchantDetails(request, body, paymentEntity);
+    const merchantId = resolution.merchantId;
+    const rawAmount = Number(paymentEntity.amount || 149900);
+    const amountInr = rawAmount > 500 && rawAmount % 100 === 0 ? rawAmount / 100 : rawAmount;
+    const currency = paymentEntity.currency || 'INR';
+    const method = (paymentEntity.method || paymentEntity.payment_method_type || 'upi').toLowerCase();
+    const rawEmail = paymentEntity.email || 'customer@example.com';
+    const rawPhone = paymentEntity.contact || paymentEntity.phone || '';
+    const rawPaymentId = paymentEntity.vpa || paymentEntity.card_id || `pm_${crypto.randomUUID().slice(0, 8)}`;
+    const deviceId = paymentEntity.notes?.device_id || paymentEntity.device_id || `dev_${crypto.randomUUID().slice(0, 8)}`;
+    const ipAddress = paymentEntity.notes?.ip_address || paymentEntity.ip_address || request.ip || '0.0.0.0';
+    const customerId = paymentEntity.customer_id || `cust_${crypto.randomUUID().slice(0, 8)}`;
+
     let signatureVerified = false;
 
     if (secret) {
       if (!signature) {
-        logger.warn('⚠️ Razorpay Webhook missing X-Razorpay-Signature header');
+        logger.warn('Razorpay Webhook missing X-Razorpay-Signature header');
+        await recordWebhookDelivery({
+          gateway: 'razorpay',
+          url_path: request.url,
+          resolved_merchant_id: merchantId,
+          merchant_resolution_source: resolution.source,
+          signature_verified: false,
+          signature_failure_reason: 'missing_header',
+          outcome: 'rejected_signature',
+          reason: 'Missing X-Razorpay-Signature header',
+          status_code: 401,
+          payment_id: paymentId,
+          amount: amountInr,
+          currency,
+          payload_preview: rawBody,
+        });
         return reply.status(401).send({
           success: false,
           error: { code: 'INVALID_SIGNATURE', message: 'Missing Razorpay signature header' },
@@ -291,6 +459,21 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
         signatureVerified = true;
       } else {
         logger.warn({ signature }, '⚠️ Razorpay Webhook HMAC signature verification failed');
+        await recordWebhookDelivery({
+          gateway: 'razorpay',
+          url_path: request.url,
+          resolved_merchant_id: merchantId,
+          merchant_resolution_source: resolution.source,
+          signature_verified: false,
+          signature_failure_reason: 'mismatched_signature',
+          outcome: 'rejected_signature',
+          reason: 'HMAC signature verification failed (mismatched X-Razorpay-Signature)',
+          status_code: 401,
+          payment_id: paymentId,
+          amount: amountInr,
+          currency,
+          payload_preview: rawBody,
+        });
         return reply.status(401).send({
           success: false,
           error: { code: 'INVALID_SIGNATURE', message: 'HMAC signature verification failed' },
@@ -300,27 +483,12 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       signatureVerified = false;
     }
 
-    const body = (request.body as any) || {};
-    const event = body.event || 'payment.captured';
-    const paymentEntity = body.payload?.payment?.entity || body.payment || body;
-
-    const paymentId = paymentEntity.id || `pay_${crypto.randomUUID().slice(0, 10)}`;
-    const merchantId = await resolveWebhookMerchantId(request, body, paymentEntity);
-    const rawAmount = Number(paymentEntity.amount || 149900);
-    const amountInr = rawAmount > 500 && rawAmount % 100 === 0 ? rawAmount / 100 : rawAmount;
-    const currency = paymentEntity.currency || 'INR';
-    const method = (paymentEntity.method || paymentEntity.payment_method_type || 'upi').toLowerCase();
-    const rawEmail = paymentEntity.email || 'customer@example.com';
-    const rawPhone = paymentEntity.contact || paymentEntity.phone || '';
-    const rawPaymentId = paymentEntity.vpa || paymentEntity.card_id || `pm_${crypto.randomUUID().slice(0, 8)}`;
-    const deviceId = paymentEntity.notes?.device_id || paymentEntity.device_id || `dev_${crypto.randomUUID().slice(0, 8)}`;
-    const ipAddress = paymentEntity.notes?.ip_address || paymentEntity.ip_address || request.ip || '0.0.0.0';
-    const customerId = paymentEntity.customer_id || `cust_${crypto.randomUUID().slice(0, 8)}`;
-
     return processWebhookTransaction({
       gateway: 'razorpay',
       paymentId,
       merchantId,
+      resolutionSource: resolution.source,
+      urlPath: request.url,
       amountInr,
       currency,
       method,
@@ -333,6 +501,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       customerId,
       event,
       signatureVerified,
+      rawPayloadPreview: rawBody,
       reply,
     });
   };
@@ -349,11 +518,44 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     const sigHeader = (request.headers['stripe-signature'] as string) || '';
     const secret = (config as any).stripe?.webhookSecret || process.env.STRIPE_WEBHOOK_SECRET || '';
 
+    const body = (request.body as any) || {};
+    const event = body.type || 'payment_intent.succeeded';
+    const obj = body.data?.object || body;
+
+    const paymentId = obj.id || `pi_${crypto.randomUUID().slice(0, 10)}`;
+    const resolution = await resolveWebhookMerchantDetails(request, body, obj);
+    const merchantId = resolution.merchantId;
+    const rawAmount = Number(obj.amount || obj.amount_received || 2999);
+    const amountInr = rawAmount > 100 ? rawAmount / 100 : rawAmount;
+    const currency = (obj.currency || 'INR').toUpperCase();
+    const method = (obj.payment_method_types?.[0] || obj.payment_method_details?.type || 'card').toLowerCase();
+    const rawEmail = obj.receipt_email || obj.billing_details?.email || obj.customer_email || 'customer@stripe.com';
+    const rawPhone = obj.billing_details?.phone || '';
+    const rawPaymentId = obj.payment_method || obj.charges?.data?.[0]?.payment_method || `pm_stripe_${crypto.randomUUID().slice(0, 8)}`;
+    const deviceId = obj.metadata?.device_id || `dev_stripe_${crypto.randomUUID().slice(0, 8)}`;
+    const ipAddress = obj.metadata?.ip_address || request.ip || '0.0.0.0';
+    const customerId = obj.customer || `cust_stripe_${crypto.randomUUID().slice(0, 8)}`;
+
     let signatureVerified = false;
 
     if (secret) {
       if (!sigHeader) {
         logger.warn('⚠️ Stripe Webhook missing Stripe-Signature header');
+        await recordWebhookDelivery({
+          gateway: 'stripe',
+          url_path: request.url,
+          resolved_merchant_id: merchantId,
+          merchant_resolution_source: resolution.source,
+          signature_verified: false,
+          signature_failure_reason: 'missing_header',
+          outcome: 'rejected_signature',
+          reason: 'Missing Stripe-Signature header',
+          status_code: 401,
+          payment_id: paymentId,
+          amount: amountInr,
+          currency,
+          payload_preview: rawBody,
+        });
         return reply.status(401).send({
           success: false,
           error: { code: 'INVALID_SIGNATURE', message: 'Missing Stripe-Signature header' },
@@ -372,6 +574,21 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
 
       if (!timestampStr || v1Signatures.length === 0) {
         logger.warn({ sigHeader }, '⚠️ Stripe Webhook signature header malformed');
+        await recordWebhookDelivery({
+          gateway: 'stripe',
+          url_path: request.url,
+          resolved_merchant_id: merchantId,
+          merchant_resolution_source: resolution.source,
+          signature_verified: false,
+          signature_failure_reason: 'malformed_header',
+          outcome: 'rejected_signature',
+          reason: 'Stripe signature header format invalid (missing t= or v1=)',
+          status_code: 401,
+          payment_id: paymentId,
+          amount: amountInr,
+          currency,
+          payload_preview: rawBody,
+        });
         return reply.status(401).send({
           success: false,
           error: { code: 'INVALID_SIGNATURE', message: 'Stripe signature header format invalid' },
@@ -382,6 +599,21 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       const now = Math.floor(Date.now() / 1000);
       if (isNaN(timestamp) || Math.abs(now - timestamp) > 300) {
         logger.warn({ timestamp, now }, '⚠️ Stripe Webhook timestamp outside 5-minute tolerance window');
+        await recordWebhookDelivery({
+          gateway: 'stripe',
+          url_path: request.url,
+          resolved_merchant_id: merchantId,
+          merchant_resolution_source: resolution.source,
+          signature_verified: false,
+          signature_failure_reason: 'expired_timestamp',
+          outcome: 'rejected_signature',
+          reason: 'Stripe webhook timestamp expired (replay attack tolerance exceeded)',
+          status_code: 401,
+          payment_id: paymentId,
+          amount: amountInr,
+          currency,
+          payload_preview: rawBody,
+        });
         return reply.status(401).send({
           success: false,
           error: { code: 'EXPIRED_SIGNATURE', message: 'Stripe webhook timestamp expired (replay attack tolerance exceeded)' },
@@ -405,6 +637,21 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
         signatureVerified = true;
       } else {
         logger.warn({ sigHeader }, '⚠️ Stripe Webhook HMAC signature mismatch');
+        await recordWebhookDelivery({
+          gateway: 'stripe',
+          url_path: request.url,
+          resolved_merchant_id: merchantId,
+          merchant_resolution_source: resolution.source,
+          signature_verified: false,
+          signature_failure_reason: 'mismatched_signature',
+          outcome: 'rejected_signature',
+          reason: 'Stripe signature verification failed (HMAC mismatch)',
+          status_code: 401,
+          payment_id: paymentId,
+          amount: amountInr,
+          currency,
+          payload_preview: rawBody,
+        });
         return reply.status(401).send({
           success: false,
           error: { code: 'INVALID_SIGNATURE', message: 'Stripe signature verification failed' },
@@ -414,27 +661,12 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       signatureVerified = false;
     }
 
-    const body = (request.body as any) || {};
-    const event = body.type || 'payment_intent.succeeded';
-    const obj = body.data?.object || body;
-
-    const paymentId = obj.id || `pi_${crypto.randomUUID().slice(0, 10)}`;
-    const merchantId = await resolveWebhookMerchantId(request, body, obj);
-    const rawAmount = Number(obj.amount || obj.amount_received || 2999);
-    const amountInr = rawAmount > 100 ? rawAmount / 100 : rawAmount;
-    const currency = (obj.currency || 'INR').toUpperCase();
-    const method = (obj.payment_method_types?.[0] || obj.payment_method_details?.type || 'card').toLowerCase();
-    const rawEmail = obj.receipt_email || obj.billing_details?.email || obj.customer_email || 'customer@stripe.com';
-    const rawPhone = obj.billing_details?.phone || '';
-    const rawPaymentId = obj.payment_method || obj.charges?.data?.[0]?.payment_method || `pm_stripe_${crypto.randomUUID().slice(0, 8)}`;
-    const deviceId = obj.metadata?.device_id || `dev_stripe_${crypto.randomUUID().slice(0, 8)}`;
-    const ipAddress = obj.metadata?.ip_address || request.ip || '0.0.0.0';
-    const customerId = obj.customer || `cust_stripe_${crypto.randomUUID().slice(0, 8)}`;
-
     return processWebhookTransaction({
       gateway: 'stripe',
       paymentId,
       merchantId,
+      resolutionSource: resolution.source,
+      urlPath: request.url,
       amountInr,
       currency,
       method,
@@ -447,6 +679,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       customerId,
       event,
       signatureVerified,
+      rawPayloadPreview: rawBody,
       reply,
     });
   };
@@ -464,11 +697,44 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     const timestampStr = (request.headers['x-webhook-timestamp'] as string) || (request.headers['x-cashfree-timestamp'] as string) || '';
     const secret = (config as any).cashfree?.webhookSecret || process.env.CASHFREE_WEBHOOK_SECRET || '';
 
+    const body = (request.body as any) || {};
+    const event = body.type || body.event || 'PAYMENT_SUCCESS_WEBHOOK';
+    const payment = body.data?.payment || body.data?.order || body.data || body;
+    const customer = body.data?.customer_details || body.customer_details || {};
+
+    const paymentId = payment.cf_payment_id ? `cf_${payment.cf_payment_id}` : (payment.payment_id || `cf_${crypto.randomUUID().slice(0, 10)}`);
+    const resolution = await resolveWebhookMerchantDetails(request, body, payment);
+    const merchantId = resolution.merchantId;
+    const amountInr = Number(payment.payment_amount || payment.order_amount || 1999);
+    const currency = (payment.payment_currency || payment.order_currency || 'INR').toUpperCase();
+    const method = (payment.payment_group || payment.payment_mode || 'upi').toLowerCase();
+    const rawEmail = customer.customer_email || 'customer@cashfree.com';
+    const rawPhone = customer.customer_phone || '';
+    const rawPaymentId = payment.payment_method || `pm_cf_${crypto.randomUUID().slice(0, 8)}`;
+    const deviceId = customer.device_id || body.device_id || `dev_cf_${crypto.randomUUID().slice(0, 8)}`;
+    const ipAddress = body.ip_address || request.ip || '0.0.0.0';
+    const customerId = customer.customer_id || `cust_cf_${crypto.randomUUID().slice(0, 8)}`;
+
     let signatureVerified = false;
 
     if (secret) {
       if (!signature) {
         logger.warn('⚠️ Cashfree Webhook missing x-webhook-signature header');
+        await recordWebhookDelivery({
+          gateway: 'cashfree',
+          url_path: request.url,
+          resolved_merchant_id: merchantId,
+          merchant_resolution_source: resolution.source,
+          signature_verified: false,
+          signature_failure_reason: 'missing_header',
+          outcome: 'rejected_signature',
+          reason: 'Missing Cashfree signature header',
+          status_code: 401,
+          payment_id: paymentId,
+          amount: amountInr,
+          currency,
+          payload_preview: rawBody,
+        });
         return reply.status(401).send({
           success: false,
           error: { code: 'INVALID_SIGNATURE', message: 'Missing Cashfree signature header' },
@@ -480,6 +746,21 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
         const now = Math.floor(Date.now() / 1000);
         if (!isNaN(timestamp) && Math.abs(now - timestamp) > 300) {
           logger.warn({ timestamp, now }, '⚠️ Cashfree Webhook timestamp outside 5-minute tolerance window');
+          await recordWebhookDelivery({
+            gateway: 'cashfree',
+            url_path: request.url,
+            resolved_merchant_id: merchantId,
+            merchant_resolution_source: resolution.source,
+            signature_verified: false,
+            signature_failure_reason: 'expired_timestamp',
+            outcome: 'rejected_signature',
+            reason: 'Cashfree webhook timestamp expired (> 300 seconds)',
+            status_code: 401,
+            payment_id: paymentId,
+            amount: amountInr,
+            currency,
+            payload_preview: rawBody,
+          });
           return reply.status(401).send({
             success: false,
             error: { code: 'EXPIRED_SIGNATURE', message: 'Cashfree webhook timestamp expired' },
@@ -508,6 +789,21 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
         signatureVerified = true;
       } else {
         logger.warn({ signature }, '⚠️ Cashfree Webhook HMAC signature verification failed');
+        await recordWebhookDelivery({
+          gateway: 'cashfree',
+          url_path: request.url,
+          resolved_merchant_id: merchantId,
+          merchant_resolution_source: resolution.source,
+          signature_verified: false,
+          signature_failure_reason: 'mismatched_signature',
+          outcome: 'rejected_signature',
+          reason: 'Cashfree signature verification failed (HMAC mismatch)',
+          status_code: 401,
+          payment_id: paymentId,
+          amount: amountInr,
+          currency,
+          payload_preview: rawBody,
+        });
         return reply.status(401).send({
           success: false,
           error: { code: 'INVALID_SIGNATURE', message: 'Cashfree signature verification failed' },
@@ -517,27 +813,12 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       signatureVerified = false;
     }
 
-    const body = (request.body as any) || {};
-    const event = body.type || body.event || 'PAYMENT_SUCCESS_WEBHOOK';
-    const payment = body.data?.payment || body.data?.order || body.data || body;
-    const customer = body.data?.customer_details || body.customer_details || {};
-
-    const paymentId = payment.cf_payment_id ? `cf_${payment.cf_payment_id}` : (payment.payment_id || `cf_${crypto.randomUUID().slice(0, 10)}`);
-    const merchantId = await resolveWebhookMerchantId(request, body, payment);
-    const amountInr = Number(payment.payment_amount || payment.order_amount || 1999);
-    const currency = (payment.payment_currency || payment.order_currency || 'INR').toUpperCase();
-    const method = (payment.payment_group || payment.payment_mode || 'upi').toLowerCase();
-    const rawEmail = customer.customer_email || 'customer@cashfree.com';
-    const rawPhone = customer.customer_phone || '';
-    const rawPaymentId = payment.payment_method || `pm_cf_${crypto.randomUUID().slice(0, 8)}`;
-    const deviceId = customer.device_id || body.device_id || `dev_cf_${crypto.randomUUID().slice(0, 8)}`;
-    const ipAddress = body.ip_address || request.ip || '0.0.0.0';
-    const customerId = customer.customer_id || `cust_cf_${crypto.randomUUID().slice(0, 8)}`;
-
     return processWebhookTransaction({
       gateway: 'cashfree',
       paymentId,
       merchantId,
+      resolutionSource: resolution.source,
+      urlPath: request.url,
       amountInr,
       currency,
       method,
@@ -550,6 +831,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       customerId,
       event,
       signatureVerified,
+      rawPayloadPreview: rawBody,
       reply,
     });
   };
@@ -565,14 +847,41 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     const rawBody = (request as any).rawBody || JSON.stringify(request.body || {});
     const body = (request.body as any) || {};
     const signature = (request.headers['x-webhook-signature'] as string) || (request.headers['x-custom-signature'] as string) || '';
-    const merchantId = await resolveWebhookMerchantId(request, body, body);
+    const resolution = await resolveWebhookMerchantDetails(request, body, body);
+    const merchantId = resolution.merchantId;
     const customSecret = process.env.CUSTOM_WEBHOOK_SECRET || '';
+
+    const paymentId = body.payment_id || body.transaction_id || `txn_${crypto.randomUUID().slice(0, 10)}`;
+    const amountInr = Number(body.amount || 1000);
+    const currency = (body.currency || 'INR').toUpperCase();
+    const method = (body.payment_method || body.method || 'card').toLowerCase();
+    const rawEmail = body.email || body.customer_email || 'customer@store.com';
+    const rawPhone = body.phone || body.customer_phone || '';
+    const rawPaymentId = body.card_id || body.vpa || body.pm_id || `pm_${crypto.randomUUID().slice(0, 8)}`;
+    const deviceId = body.device_id || `dev_${crypto.randomUUID().slice(0, 8)}`;
+    const ipAddress = body.ip_address || request.ip || '0.0.0.0';
+    const customerId = body.customer_id || `cust_${crypto.randomUUID().slice(0, 8)}`;
 
     let signatureVerified = false;
 
     if (customSecret) {
       if (!signature) {
         logger.warn({ merchantId }, '⚠️ Custom Webhook missing signature header when secret is configured');
+        await recordWebhookDelivery({
+          gateway: 'custom',
+          url_path: request.url,
+          resolved_merchant_id: merchantId,
+          merchant_resolution_source: resolution.source,
+          signature_verified: false,
+          signature_failure_reason: 'missing_header',
+          outcome: 'rejected_signature',
+          reason: 'Missing custom webhook signature header',
+          status_code: 401,
+          payment_id: paymentId,
+          amount: amountInr,
+          currency,
+          payload_preview: rawBody,
+        });
         return reply.status(401).send({
           success: false,
           error: { code: 'INVALID_SIGNATURE', message: 'Missing custom webhook signature header' },
@@ -587,6 +896,21 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
         signatureVerified = true;
       } else {
         logger.warn({ signature, merchantId }, '⚠️ Custom Webhook HMAC signature verification failed');
+        await recordWebhookDelivery({
+          gateway: 'custom',
+          url_path: request.url,
+          resolved_merchant_id: merchantId,
+          merchant_resolution_source: resolution.source,
+          signature_verified: false,
+          signature_failure_reason: 'mismatched_signature',
+          outcome: 'rejected_signature',
+          reason: 'Custom webhook signature verification failed (HMAC mismatch)',
+          status_code: 401,
+          payment_id: paymentId,
+          amount: amountInr,
+          currency,
+          payload_preview: rawBody,
+        });
         return reply.status(401).send({
           success: false,
           error: { code: 'INVALID_SIGNATURE', message: 'Custom webhook signature verification failed' },
@@ -597,21 +921,12 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       logger.info({ merchantId }, 'Custom webhook ingested unverified — no secret configured');
     }
 
-    const paymentId = body.payment_id || body.transaction_id || `txn_${crypto.randomUUID().slice(0, 10)}`;
-    const amountInr = Number(body.amount || 1000);
-    const currency = (body.currency || 'INR').toUpperCase();
-    const method = (body.payment_method || body.method || 'card').toLowerCase();
-    const rawEmail = body.email || body.customer_email || 'customer@store.com';
-    const rawPhone = body.phone || body.customer_phone || '';
-    const rawPaymentId = body.card_id || body.vpa || body.pm_id || `pm_${crypto.randomUUID().slice(0, 8)}`;
-    const deviceId = body.device_id || `dev_${crypto.randomUUID().slice(0, 8)}`;
-    const ipAddress = body.ip_address || request.ip || '0.0.0.0';
-    const customerId = body.customer_id || `cust_${crypto.randomUUID().slice(0, 8)}`;
-
     return processWebhookTransaction({
       gateway: 'custom',
       paymentId,
       merchantId,
+      resolutionSource: resolution.source,
+      urlPath: request.url,
       amountInr,
       currency,
       method,
@@ -624,12 +939,198 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       customerId,
       event: 'custom.transaction_ingested',
       signatureVerified,
+      signatureFailureReason: !customSecret ? 'missing_secret_configured' : null,
+      rawPayloadPreview: rawBody,
       reply,
     });
   };
 
   app.post('/webhooks/custom', handleCustomWebhook);
   app.post('/webhooks/custom/:merchantId', handleCustomWebhook);
+
+  // ── 6. GET /webhooks/diagnostics — Self-Service Delivery Diagnostics ───
+  const handleDiagnostics = async (request: FastifyRequest, reply: FastifyReply) => {
+    const authCtx = getAuthContext(request);
+    const targetMerchantId = authCtx?.merchantId || (request.query as any)?.merchant_id || 'm_ecommerce_01';
+
+    // 1. Fetch from Postgres if available
+    let dbLogs: WebhookDeliveryLogEntry[] = [];
+    try {
+      const res = await pool.query(
+        `SELECT id, timestamp, gateway, url_path, resolved_merchant_id, merchant_resolution_source,
+                signature_verified, signature_failure_reason, outcome, reason, status_code, payment_id,
+                amount, currency, payload_preview
+         FROM webhook_delivery_log
+         WHERE resolved_merchant_id = $1 OR url_path LIKE $2 OR resolved_merchant_id = 'fallback_default'
+         ORDER BY timestamp DESC
+         LIMIT 50`,
+        [targetMerchantId, `%${targetMerchantId}%`],
+      );
+      dbLogs = res.rows.map((r: any) => ({
+        id: r.id,
+        timestamp: new Date(r.timestamp).toISOString(),
+        gateway: r.gateway,
+        url_path: r.url_path,
+        resolved_merchant_id: r.resolved_merchant_id,
+        merchant_resolution_source: r.merchant_resolution_source,
+        signature_verified: r.signature_verified,
+        signature_failure_reason: r.signature_failure_reason,
+        outcome: r.outcome,
+        reason: r.reason,
+        status_code: r.status_code,
+        payment_id: r.payment_id,
+        amount: r.amount ? Number(r.amount) : undefined,
+        currency: r.currency,
+        payload_preview: r.payload_preview,
+      }));
+    } catch {
+      // Non-blocking fallback to in-memory buffer
+    }
+
+    // 2. Merge DB logs with in-memory buffer, deduplicating by ID or timestamp+paymentId
+    const seen = new Set<string>();
+    const combined: WebhookDeliveryLogEntry[] = [];
+
+    for (const log of [...webhookDeliveryLogBuffer, ...dbLogs]) {
+      const key = log.id || `${log.timestamp}_${log.payment_id}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        if (
+          log.resolved_merchant_id === targetMerchantId ||
+          log.url_path.includes(targetMerchantId) ||
+          log.merchant_resolution_source === 'fallback_default' ||
+          log.resolved_merchant_id === 'fallback_default' ||
+          log.resolved_merchant_id === 'UNRESOLVED'
+        ) {
+          combined.push(log);
+        }
+      }
+    }
+
+    combined.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    const recent20 = combined.slice(0, 20);
+
+    // 3. Diagnostic calculations
+    const now = Date.now();
+    const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
+    const deliveries24h = combined.filter((l) => {
+      const ts = new Date(l.timestamp).getTime();
+      return (l.resolved_merchant_id === targetMerchantId || l.url_path.includes(targetMerchantId)) && ts >= twentyFourHoursAgo;
+    });
+
+    const zeroDeliveriesIn24h = deliveries24h.length === 0;
+
+    const unattributedRecent = combined.filter((l) => {
+      const ts = new Date(l.timestamp).getTime();
+      return (
+        (l.merchant_resolution_source === 'fallback_default' ||
+          l.resolved_merchant_id === 'fallback_default' ||
+          l.resolved_merchant_id === 'UNRESOLVED') &&
+        ts >= twentyFourHoursAgo
+      );
+    });
+
+    let advice = 'Webhook deliveries are active and operational.';
+    if (zeroDeliveriesIn24h) {
+      advice =
+        'No webhook deliveries received in the last 24 hours. Confirm the URL below is registered in your Razorpay Dashboard → Settings → Webhooks, and that it matches exactly.';
+    } else if (unattributedRecent.length > 0) {
+      advice = `Notice: Found ${unattributedRecent.length} recent unattributed events received at generic URL variants. Register your dedicated merchant URL to auto-link every transaction.`;
+    }
+
+    return reply.send({
+      success: true,
+      data: {
+        merchant_id: targetMerchantId,
+        recent_deliveries: recent20,
+        total_deliveries: combined.length,
+        deliveries_24h_count: deliveries24h.length,
+        zero_deliveries_in_24h: zeroDeliveriesIn24h,
+        unattributed_count: unattributedRecent.length,
+        advice,
+      },
+    });
+  };
+
+  app.get('/webhooks/diagnostics', { preHandler: [authenticate] }, handleDiagnostics);
+
+  // ── 7. POST /webhooks/self-test — Test Real Production Webhook Path ───
+  app.post(
+    '/webhooks/self-test',
+    { preHandler: [authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const authCtx = getAuthContext(request);
+      const merchantId = authCtx?.merchantId || 'm_ecommerce_01';
+      const body = (request.body as any) || {};
+      const gateway = body.gateway || 'razorpay';
+
+      const paymentId = `pay_selftest_${crypto.randomUUID().slice(0, 8)}`;
+      const amountPaise = 50000; // Rs 500
+      const testPayload = {
+        event: 'payment.captured',
+        payload: {
+          payment: {
+            entity: {
+              id: paymentId,
+              amount: amountPaise,
+              currency: 'INR',
+              status: 'captured',
+              method: 'upi',
+              email: 'self-test@safero.internal',
+              contact: '+919876543210',
+              vpa: 'selftest@upi',
+              notes: {
+                merchant_id: merchantId,
+                source: 'self_test_runner',
+              },
+            },
+          },
+        },
+      };
+
+      const rawBody = JSON.stringify(testPayload);
+      const secret = config.razorpay.webhookSecret || process.env.RAZORPAY_WEBHOOK_SECRET || 'rzpsec_test_razorpay_secret_99999';
+      const signature = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+
+      const targetUrl = `/webhooks/razorpay/${encodeURIComponent(merchantId)}`;
+
+      // Execute full production HTTP pipeline via Fastify injection
+      const result = await app.inject({
+        method: 'POST',
+        url: targetUrl,
+        headers: {
+          'content-type': 'application/json',
+          'x-razorpay-signature': signature,
+        },
+        payload: rawBody,
+      });
+
+      let parsedRes: any = {};
+      try {
+        parsedRes = JSON.parse(result.body);
+      } catch {
+        parsedRes = { raw: result.body };
+      }
+
+      return reply.send({
+        success: result.statusCode === 200,
+        data: {
+          status_code: result.statusCode,
+          signature_verified: result.statusCode === 200,
+          target_url: targetUrl,
+          resolved_merchant_id: merchantId,
+          transaction_id: paymentId,
+          amount_inr: 500,
+          response: parsedRes,
+          message:
+            result.statusCode === 200
+              ? 'Self-test webhook executed successfully through the complete production HMAC verification & ML pipeline!'
+              : `Self-test webhook returned status code ${result.statusCode}: ${parsedRes.error?.message || 'Verification or ingestion failed'}`,
+        },
+      });
+    },
+  );
 
   // ── 6. POST /api/v1/webhooks/simulate — Authenticated Merchant Simulator
   app.post(

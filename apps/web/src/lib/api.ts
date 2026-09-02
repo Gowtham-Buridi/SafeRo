@@ -288,6 +288,58 @@ export const api = {
     }),
 
   getWebhookHistory: () => fetchJson<any[]>('/webhooks/history'),
+  getWebhookDiagnostics: () => fetchJson<{
+    merchant_id: string;
+    recent_deliveries: Array<{
+      id: string;
+      timestamp: string;
+      gateway: string;
+      url_path: string;
+      resolved_merchant_id: string;
+      merchant_resolution_source: string;
+      signature_verified: boolean;
+      signature_failure_reason?: string | null;
+      outcome: 'processed' | 'rejected_signature' | 'rejected_other' | 'error';
+      reason: string;
+      status_code: number;
+      payment_id?: string;
+      amount?: number;
+      currency?: string;
+    }>;
+    total_deliveries: number;
+    deliveries_24h_count: number;
+    zero_deliveries_in_24h: boolean;
+    unattributed_count: number;
+    advice: string;
+  }>('/webhooks/diagnostics'),
+
+  sendSelfTestWebhook: (gateway = 'razorpay') =>
+    fetchJson<{
+      status_code: number;
+      signature_verified: boolean;
+      target_url: string;
+      resolved_merchant_id: string;
+      transaction_id: string;
+      amount_inr: number;
+      response: any;
+      message: string;
+    }>('/webhooks/self-test', {
+      method: 'POST',
+      body: JSON.stringify({ gateway }),
+    }),
+
+  getSystemInfo: () =>
+    fetchJson<{
+      status: string;
+      service: string;
+      version: string;
+      git_commit: string;
+      git_commit_short: string;
+      deployed_at: string;
+      uptime_seconds: number;
+      timestamp: string;
+    }>('/system/info'),
+
   getMerchantProfile: () => fetchJson<any>('/merchants/me'),
   updateMerchantGatewayAccount: (razorpay_merchant_id: string) =>
     fetchJson<any>('/merchants/me/gateway-account', {
